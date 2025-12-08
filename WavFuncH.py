@@ -1,14 +1,17 @@
 import numpy as np
-import matplotlib.pyplot as plt
 pi = np.pi
 from scipy.special import factorial as fact
 from scipy.special import genlaguerre as Laguerre
 from scipy.special import lpmv as Legendre
 import pyvista as pv
 
-n = int(input('Wprowadz glowna liczbe kwantowa'))
-l = int(input('Wprowadz poboczna liczbe kwantowa'))
-m = int(input('Wprowadz magnetyczna liczbe kwantowa'))
+n1 = int(input('Wprowadz pierwsza glowna liczbe kwantowa'))
+l1 = int(input('Wprowadz pierwsza poboczna liczbe kwantowa'))
+m1 = int(input('Wprowadz pierwsza magnetyczna liczbe kwantowa'))
+
+n2 = int(input('Wprowadz druga glowna liczbe kwantowa'))
+l2 = int(input('Wprowadz druga poboczna liczbe kwantowa'))
+m2 = int(input('Wprowadz druga magnetyczna liczbe kwantowa'))
 
 def przestrz(n, rozm_r=180, rozm_k=150):
     rmax =  10*n**2
@@ -49,11 +52,6 @@ def funkfal(R,Theta,Phi,n,l,m):
 
     return np.asarray(Psi, dtype=complex)
 
-def chmuraprawd(R,Theta,Phi,n,l,m):
-    Psi = funkfal(R, Theta, Phi, n, l, m)
-    FPrawd = np.abs(Psi)**2
-    return np.asarray(FPrawd, dtype=float)
-
 def sf_na_kart(R, Theta, Phi):
     X = R*np.sin(Theta)*np.cos(Phi)
     Y = R*np.sin(Theta)*np.sin(Phi)
@@ -61,30 +59,63 @@ def sf_na_kart(R, Theta, Phi):
 
     return X, Y, Z
 
-def plot_opengl(n,l,m):
-    R, Theta, Phi = przestrz(n)
-    Pr = chmuraprawd(R, Theta, Phi, n, l, m)
-    cutoff = 0.0001
-    mask = Pr > cutoff
+def main():
+    max_n = max(n1, n2)
+    R, Theta, Phi = przestrz(max_n)
+
+    FPrzesrz1 = funkfal(R,Theta,Phi,n1,l1,m1)
+    Fprzesrz2 = funkfal(R,Theta,Phi,n2,l2,m2)
+
+    PrawdPrzesrz = np.abs(FPrzesrz1) ** 2 + np.abs(Fprzesrz2) ** 2
+    cutoff = PrawdPrzesrz.max() * 0.001
+    mask = PrawdPrzesrz > cutoff
+
+    FPrzesrz1_mask = FPrzesrz1[mask]
+    FPrzesrz2_mask = Fprzesrz2[mask]
     X, Y, Z = sf_na_kart(R[mask], Theta[mask], Phi[mask])
-    wart = Pr[mask]
     punkty = np.column_stack((X, Y, Z))
+
+    E1 = -0.5 / n1 ** 2
+    E2 = -0.5 / n2 ** 2
+
     chmura = pv.PolyData(punkty)
-    chmura["prawdopodobienstwo"] = wart
+    chmura["Prawd"] = np.zeros(len(punkty))
 
     plotter = pv.Plotter(window_size=[1000, 1000])
     plotter.set_background("black")
 
     plotter.add_mesh(chmura,
-        scalars="prawdopodobienstwo",
-        cmap="plasma",
-        point_size=5.0,
-        render_points_as_spheres=True,
-        opacity="linear",
-        show_scalar_bar=False)
+                     scalars="Prawd",
+                     cmap="plasma",
+                     point_size=5.0,
+                     render_points_as_spheres=True,
+                     opacity="linear",
+                     show_scalar_bar=False)
 
-    plotter.add_text(f"Orbital wodoru: (n={n}, l={l}, m={m})", font_size=12, color="white")
     plotter.show_axes()
-    plotter.show()
 
-plot_opengl(n,l,m)
+    plotter.show(interactive_update=True)
+
+    t = 0.0
+    dt = 1.0
+
+    while True:
+        try:
+            faz1 = np.exp(-1j*E1*t)
+            faz2 = np.exp(-1j*E2*t)
+            Psi = (FPrzesrz1_mask * faz1) + (FPrzesrz2_mask * faz2)
+            Prawd = np.abs(Psi) ** 2
+
+            chmura["Prawd"] = Prawd
+
+            plotter.update()
+
+            if not plotter.render_window.GetGenericDisplayId():
+                break
+
+            t += dt
+        except AttributeError:
+            break
+
+if __name__ == "__main__":
+    main()
