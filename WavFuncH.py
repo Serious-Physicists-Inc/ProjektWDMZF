@@ -4,16 +4,17 @@ pi = np.pi
 from scipy.special import factorial as fact
 from scipy.special import genlaguerre as Laguerre
 from scipy.special import lpmv as Legendre
+import pyvista as pv
 
 n = int(input('Wprowadz glowna liczbe kwantowa'))
 l = int(input('Wprowadz poboczna liczbe kwantowa'))
 m = int(input('Wprowadz magnetyczna liczbe kwantowa'))
 
-def przestrz(n,Z=1):
-    rmax =  10*n**2/Z 
-    r = np.linspace(0, rmax, 50)
-    theta = np.linspace(0, np.pi, 50)
-    phi = np.linspace(0, 2*np.pi, 50)
+def przestrz(n, rozm_r=180, rozm_k=150):
+    rmax =  10*n**2
+    r = np.linspace(0, rmax, rozm_r)
+    theta = np.linspace(0, np.pi, rozm_k)
+    phi = np.linspace(0, 2*np.pi, rozm_k)
 
     R, Theta, Phi = np.meshgrid(r, theta, phi, indexing='ij')
 
@@ -42,7 +43,7 @@ def funkfal(R,Theta,Phi,n,l,m):
 
     L = np.asarray(Laguerre(n-l-1,2*l+1)(2*R/(n*a0)), dtype=float)
 
-    rad = np.sqrt((2/(n*a0))**3*fact(n-l-1)/(2*n*fact(l+1)**3))*(2/(n*a0))**l*L*np.exp(-R/(n*a0))
+    rad = R**l*(2/(n*a0))**(l+1)*L*np.exp(-R/(n*a0))
 
     Psi = rad * kat
 
@@ -60,31 +61,30 @@ def sf_na_kart(R, Theta, Phi):
 
     return X, Y, Z
 
-def cutoff_wartosc(Pr, proc = 0.93):
+def plot_opengl(n,l,m):
     R, Theta, Phi = przestrz(n)
     Pr = chmuraprawd(R, Theta, Phi, n, l, m)
-    Prf = Pr.reshape(-1)
-    Prs = np.sort(Prf)
-    tot_praw = Prs.sum()
-    sum_doc = tot_praw * proc
-    mal_sort = Prs[::-1]
-    kumulac_sum = np.cumsum(mal_sort)
-    cutoffi = np.argmax(kumulac_sum >= sum_doc)
-    Vcutoff = mal_sort[cutoffi]
-    return Vcutoff
-
-def plot_chmur(R, Theta, Phi,proc = 0.93):
-    R, Theta, Phi = przestrz(n)
-    X, Y, Z = sf_na_kart(R, Theta, Phi)
-    Pr = chmuraprawd(R, Theta, Phi, n, l ,m)
-    Pr = Pr / Pr.max()
-    cutoff = cutoff_wartosc(Pr, proc)
+    cutoff = 0.0001
     mask = Pr > cutoff
+    X, Y, Z = sf_na_kart(R[mask], Theta[mask], Phi[mask])
+    wart = Pr[mask]
+    punkty = np.column_stack((X, Y, Z))
+    chmura = pv.PolyData(punkty)
+    chmura["prawdopodobienstwo"] = wart
 
-    fig = plt.figure(figsize=(7, 7))
-    ax = fig.add_subplot(111, projection='3d')
+    plotter = pv.Plotter(window_size=[1000, 1000])
+    plotter.set_background("black")
 
-    ax.scatter(X[mask], Y[mask], Z[mask], c=Pr[mask], cmap='plasma', s=1, alpha=0.5)
-    plt.show()
+    plotter.add_mesh(chmura,
+        scalars="prawdopodobienstwo",
+        cmap="plasma",
+        point_size=5.0,
+        render_points_as_spheres=True,
+        opacity="linear",
+        show_scalar_bar=False)
 
-plot_chmur(n,l,m,)
+    plotter.add_text(f"Orbital wodoru: (n={n}, l={l}, m={m})", font_size=12, color="white")
+    plotter.show_axes()
+    plotter.show()
+
+plot_opengl(n,l,m)
