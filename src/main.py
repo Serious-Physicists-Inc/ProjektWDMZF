@@ -1,9 +1,15 @@
 from model import Atom, State
+from plot import Plot
 
-n1 = int(input('Wprowadz pierwsza glowna liczbe kwantowa'))
-l1 = int(input('Wprowadz pierwsza poboczna liczbe kwantowa'))
-m1 = int(input('Wprowadz pierwsza magnetyczna liczbe kwantowa'))
+def main():
+    plot = Plot()
 
-n2 = int(input('Wprowadz druga glowna liczbe kwantowa'))
-l2 = int(input('Wprowadz druga poboczna liczbe kwantowa'))
-m2 = int(input('Wprowadz druga magnetyczna liczbe kwantowa'))
+    states = (State(2, 1, 0), State(3,2,1))
+    atom = Atom(*states)
+    plot.draw(atom.cart_grid())
+    plot.show()
+
+if __name__ == "__main__":
+    main()
+
+input("Naciśnij Enter, aby zakończyć...")
