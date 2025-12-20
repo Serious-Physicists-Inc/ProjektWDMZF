@@ -1,3 +1,4 @@
 .idea/
+!.idea/runConfigurations/
 .venv/
 src/__pycache__

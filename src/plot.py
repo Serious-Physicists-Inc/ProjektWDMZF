@@ -1,64 +1,89 @@
 # python internals
-from threading import Event, Thread
-import time
-from typing import Callable
+from __future__ import annotations
+from typing import Tuple, Callable, Union, Optional
+from dataclasses import dataclass
 # internal packages
 from ntypes import *
+from interval import *
 # external packages
 import numpy as np
-import pyvista as pv
+import pyqtgraph as pg
+import pyqtgraph.opengl as gl
 
-class Interval :
-    def __init__(self, action, delay) -> None:
-        self.i = 0
-        self.delay = delay
-        self.action = action
-        self.stop_event = Event()
-        self.thread = Thread(target = self.__set())
-    def __del__(self):
-        self.cancel()
-    def __set(self) -> None:
-        next_time = time.time() + self.delay
-        while not self.stop_event.wait(next_time - time.time()):
-            self.i += 1
-            next_time += self.delay
-            self.action(self.i)
-    def start(self) -> None:
-        self.thread.start()
-    def cancel(self) :
-        self.stop_event.set()
+@dataclass
+class PlotWindowSpec:
+    title: str = ""
+    bg_color: Tuple[int, int, int] = (0, 0, 0)
+    show_grid: bool = False
+    cmap_name: colormap_t = 'plasma'
 
-class Plot:
-    def __init__(self) -> None:
-        self.plotter = pv.Plotter()
-        self.plotter.background_color = "black"
-        self.plotter.window_size = (1920, 720)
-        self.data = None
-        return
-    def draw(self, grid: CartGrid) -> None:
-        points = np.column_stack((grid.x, grid.y, grid.z))
-        self.data = pv.PolyData(points)
-        self.data['prob'] = grid.psi
+class PlotWindow:
+    def __init__(self, spec: PlotWindowSpec) -> None:
+        self._view = gl.GLViewWidget()
+        self._view.setWindowTitle(spec.title)
+        self._view.setBackgroundColor(spec.bg_color)
 
-        self.plotter.add_mesh(self.data,
-            scalars = 'prob',
-            cmap = 'plasma',
-            point_size=5.0,
-            render_points_as_spheres = True,
-            opacity = 'linear',
-            show_scalar_bar = False)
-    def update(self, grid: CartGrid) -> None:
-        if self.data is None:
-            raise RuntimeError("Cannot update plot that is not drawn.")
-        self.data['prob'] = grid.psi
-        self.plotter.update()
-    def auto_update(self, function: Callable[[int], CartGrid], dt: float) -> Interval :
-        interval = Interval(lambda i: self.update(function(i)), dt)
-        return interval
+        self._grid = None
+        if spec.show_grid:
+            self._grid = gl.GLGridItem()
+            self._grid.scale(1, 1, 1)
+            self._view.addItem(self._grid)
+
+        self._cmap = pg.colormap.get(spec.cmap_name)
+
+        self._view.setCameraPosition(distance = 10.0, elevation = 20.0, azimuth = 45.0)
+    def draw(self, grid: Union[CartScatter, array_t]) -> None:
+        pass
+    def update(self, grid: Union[CartScatter, array_t]) -> None:
+        pass
+    def auto_update(self, function: Callable[[int], Union[CartScatter, array_t]], dt: float) -> Interval:
+        return Interval(lambda interval: self.update(function(interval.iter)), dt, self._view)
     def show(self) -> None:
-        self.plotter.show_axes()
-        self.plotter.show()
+        self._view.show()
 
+class ScatterPlotWindow(PlotWindow):
+    def __init__(self, spec: PlotWindowSpec = PlotWindowSpec()) -> None:
+        super().__init__(spec)
+        self.__scatter: Optional[gl.GLScatterPlotItem] = None
+    def draw(self, sc: CartScatter) -> None:
+        if self.__scatter is not None:
+            self._view.removeItem(self.__scatter)
+        self.__scatter = gl.GLScatterPlotItem(pos=np.column_stack(sc.coords()), color=self._cmap.map(sc.psi, mode='float'), size=1)
+        self._view.addItem(self.__scatter)
+    def update(self, sc: CartScatter) -> None:
+        if self.__scatter is None:
+            raise RuntimeError("Scatter plot has not been drawn yet.")
+        self.__scatter.setData(color=self._cmap.map(sc.psi, mode='float'))
 
+class VolumePlotWindow(PlotWindow):
+    def __init__(self, spec: PlotWindowSpec = PlotWindowSpec()) -> None:
+        super().__init__(spec)
+        self.__volume: Optional[gl.GLVolumeItem] = None
+    def draw(self, grid: array_t) -> None:
+        if self.__volume is not None:
+            self._view.removeItem(self.__volume)
 
+        flatten = np.ravel(np.clip(grid, 0, None))
 
+        rgba_flat = self._cmap.map(flatten, mode='float')
+        rgba_flat[..., 3] = flatten / np.max(flatten)
+
+        self.__volume = gl.GLVolumeItem(
+            data=np.ascontiguousarray((rgba_flat.reshape((*np.shape(grid), 4)) * 255).astype(np.uint8)),
+            smooth=True,
+            sliceDensity=1
+        )
+
+        self._view.addItem(self.__volume)
+    def update(self, grid: array_t) -> None:
+        if self.__volume is None:
+            raise RuntimeError("Volume plot has not been drawn yet")
+
+        flatten = np.ravel(np.clip(grid, 0, None))
+
+        rgba_flat = self._cmap.map(flatten, mode='float')
+        rgba_flat[..., 3] = flatten / np.max(flatten)
+
+        self.__volume.setData(np.ascontiguousarray((rgba_flat.reshape((*np.shape(grid), 4)) * 255).astype(np.uint8)))
+
+__all__ = ['PlotWindowSpec', 'ScatterPlotWindow', 'VolumePlotWindow']

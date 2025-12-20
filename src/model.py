@@ -1,3 +1,5 @@
+# python internals
+from __future__ import annotations
 # internal packages
 from ntypes import *
 # external packages
@@ -5,54 +7,79 @@ import numpy as np
 from scipy.special import genlaguerre as laguerre
 from scipy.special import lpmv as legendre
 from scipy.special import factorial as fact
+from scipy.interpolate import griddata
+
+class StateSpec:
+    def __init__(self, n: int, l: int, m: int) -> None:
+        if n < 1:
+            raise ValueError("The value of the principal quantum number must be greater than 0.")
+        if l >= n:
+            raise ValueError(
+                "The value of the secondary quantum number must be less than the value of the principal quantum number.")
+        if m < -l or m > l:
+            raise ValueError("The magnetic number modulus cannot be greater than the secondary quantum number modulus.")
+        self.__n = n
+        self.__l = l
+        self.__m = m
+    @property
+    def n(self) -> int: return self.__n
+    @property
+    def l(self) -> int: return self.__l
+    @property
+    def m(self) -> int: return self.__m
 
 class State:
-    def __init__(self, n: int, l: int, m: int) -> None:
-            if n < 1:
-                raise ValueError("The value of the principal quantum number must be greater than 0.")
-            if l >= n:
-                raise ValueError("The value of the secondary quantum number must be less than the value of the principal quantum number.")
-            if m < -l or m > l:
-                raise ValueError("The magnetic number modulus cannot be greater than the secondary quantum number modulus.")
-            self.__specs = {'n': n, 'l': l, 'm': m}
-            return
-    def specs(self) -> dict:
-        return self.__specs.copy()
-    def wf_val(self, p: SphPoints, t: float = 0) -> carray_t:
+    def __init__(self, spec: StateSpec) -> None:
+        self.__specs = spec
+    @property
+    def specs(self) -> StateSpec:
+        return self.__specs
+    def wf_val(self, p: SphCoords, t: float = 0) -> carray_t:
         scale = 1.0
-        px = np.asarray(legendre(abs(self.__specs['m']), self.__specs['l'], np.cos(p.theta)), dtype=complex)
-        angle = (-1) ** abs(self.__specs['m']) * np.sqrt(((2 * self.__specs['l'] + 1)\
-            * fact(self.__specs['l'] - abs(self.__specs['m']))) / (4 * np.pi * fact(self.__specs['l']\
-            + abs(self.__specs['m'])))) * px * np.exp(1j * abs(self.__specs['m']) * p.phi)
-        la = np.asarray(laguerre(self.__specs['n'] - self.__specs['l'] - 1, 2 * self.__specs['l'] + 1)(2 * p.r / (self.__specs['n'] * scale)), dtype=float)
-        radius = p.r ** self.__specs['l'] * (2 / (self.__specs['n'] * scale)) ** (self.__specs['l'] + 1) * la * np.exp(-p.r / (self.__specs['n'] * scale))
-        en = -0.5 / self.__specs['n'] ** 2
-        return np.asarray(radius * angle * np.exp(-1j*en*t), dtype=complex)
+        px = np.asarray(legendre(abs(self.__specs.m), self.__specs.l, np.cos(p.theta)), dtype=complex)
+        angle = (-1) ** abs(self.__specs.m) * np.sqrt(((2 * self.__specs.l + 1) * fact(self.__specs.l - abs(self.__specs.m))) / (4 * np.pi * fact(self.__specs.l + abs(self.__specs.m)))) * px * np.exp(1j * abs(self.__specs.m) * p.phi)
+        la = np.asarray(laguerre(self.__specs.n - self.__specs.l - 1, 2 * self.__specs.l + 1)(2 * p.r / (self.__specs.n * scale)), dtype=np.float32)
+        radius = p.r ** self.__specs.l * (2 / (self.__specs.n * scale)) ** (self.__specs.l + 1) * la * np.exp(-p.r / (self.__specs.n * scale))
+        return np.asarray(radius * angle * np.exp(-1j*self.en_val()*t), dtype=np.complex64)
+    def en_val(self) -> array_t:
+        mu = 1.0; alpha = 0.01; c = 300000.0
+        return -mu * c ** 2 * (-1 + np.sqrt(1 + (2 * alpha ** 2) / (self.__specs.n - np.abs(self.__specs.l + 0.5) - 0.5 + np.sqrt((np.abs(self.__specs.l + 0.5) + 0.5) ** 2 - alpha ** 2))))
 
 class Atom:
     def __init__(self, *args: State) -> None:
         self.__states = args
-    def __points(self, dims: GridDims) -> SphPoints:
-        rmax = 10 * max(state.specs()['n'] for state in self.__states) ** 2
+    def __points(self, dims: SphDims) -> SphCoords:
+        rmax = 10 * max(state.specs.n for state in self.__states) ** 2
         r = np.linspace(0, rmax, dims.r_dim)
         theta = np.linspace(0, np.pi, dims.angle_dim)
         phi = np.linspace(0, 2 * np.pi, dims.angle_dim)
-        return SphPoints(*(np.meshgrid(r, theta, phi, indexing='ij')),)
-    def __mask(self, p: SphPoints, t: float = 0) -> array_t:
+        return SphCoords(*(np.meshgrid(r, theta, phi, indexing='ij')),)
+    def __mask(self, p: SphCoords, t: float = 0) -> array_t:
         pr_sum = np.sum((np.abs(state.wf_val(p, t)) ** 2 for state in self.__states), axis=0)
         cutoff = pr_sum.max() * 0.001
         return pr_sum > cutoff
-    def pr_val(self, p: SphPoints, t: float = 0) ->  array_t:
+    def pr_val(self, p: SphCoords, t: float = 0) ->  array_t:
         psi = np.sum(np.array([state.wf_val(p, t) for state in self.__states], dtype=complex), axis=0)
         return np.abs(psi) ** 2
-    def sph_grid(self, t: float = 0, dims: GridDims = GridDims(180, 150)) -> SphGrid:
+    def sph_scatter(self, t: float = 0, dims: SphDims = SphDims(200, 160)) -> SphScatter:
         p = self.__points(dims)
         mask = self.__mask(p, t)
-        masked_p = SphPoints(*(c[mask] for c in p))
-        return SphGrid(*masked_p, self.pr_val(p, t)[mask])
-    def cart_grid(self, *args) -> CartGrid:
-        el = self.sph_grid(*args)
-        return CartGrid(el.r * np.sin(el.theta) * np.cos(el.phi), el.r * np.sin(el.theta) * np.sin(el.phi), el.r * np.cos(el.theta), el.psi)
+        masked_p = SphCoords(*(c[mask] for c in p))
+        return SphScatter(*masked_p, self.pr_val(p, t)[mask])
+    def cart_scatter(self, *args) -> CartScatter:
+        el = self.sph_scatter(*args)
+        return CartScatter(el.r * np.sin(el.theta) * np.cos(el.phi), el.r * np.sin(el.theta) * np.sin(el.phi), el.r * np.cos(el.theta), el.psi)
+    def cart_grid(self, t: float = 0, method: interpolation_t = 'nearest', dims: CartDims = CartDims(150, 150, 150)) -> array_t:
+        sc = self.cart_scatter(t, dims.to_sph())
+        xi = np.linspace(np.min(sc.x), np.max(sc.x), dims.x_dim)
+        yi = np.linspace(np.min(sc.y), np.max(sc.y), dims.y_dim)
+        zi = np.linspace(np.min(sc.z), np.max(sc.z), dims.z_dim)
+        return griddata(
+            np.column_stack((sc.x, sc.y, sc.z)),
+            sc.psi,
+            np.meshgrid(xi, yi, zi, indexing='ij'),
+            method=method,
+            fill_value=0.0
+        )
 
-
-
+__all__ = ['StateSpec', 'State', 'Atom']
