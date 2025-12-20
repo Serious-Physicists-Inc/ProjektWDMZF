@@ -3,8 +3,8 @@ from __future__ import annotations
 from typing import Tuple, Callable, Union, Optional
 from dataclasses import dataclass
 # internal packages
-from ntypes import *
-from interval import *
+from .ntypes import *
+from .interval import *
 # external packages
 import numpy as np
 import pyqtgraph as pg
@@ -32,11 +32,11 @@ class PlotWindow:
         self._cmap = pg.colormap.get(spec.cmap_name)
 
         self._view.setCameraPosition(distance = 10.0, elevation = 20.0, azimuth = 45.0)
-    def draw(self, grid: Union[CartScatter, array_t]) -> None:
+    def draw(self, grid: Union[CartScatter, farray_t]) -> None:
         pass
-    def update(self, grid: Union[CartScatter, array_t]) -> None:
+    def update(self, grid: Union[CartScatter, farray_t]) -> None:
         pass
-    def auto_update(self, function: Callable[[int], Union[CartScatter, array_t]], dt: float) -> Interval:
+    def auto_update(self, function: Callable[[int], Union[CartScatter, farray_t]], dt: float) -> Interval:
         return Interval(lambda interval: self.update(function(interval.iter)), dt, self._view)
     def show(self) -> None:
         self._view.show()
@@ -59,7 +59,7 @@ class VolumePlotWindow(PlotWindow):
     def __init__(self, spec: PlotWindowSpec = PlotWindowSpec()) -> None:
         super().__init__(spec)
         self.__volume: Optional[gl.GLVolumeItem] = None
-    def draw(self, grid: array_t) -> None:
+    def draw(self, grid: farray_t) -> None:
         if self.__volume is not None:
             self._view.removeItem(self.__volume)
 
@@ -69,13 +69,13 @@ class VolumePlotWindow(PlotWindow):
         rgba_flat[..., 3] = flatten / np.max(flatten)
 
         self.__volume = gl.GLVolumeItem(
-            data=np.ascontiguousarray((rgba_flat.reshape((*np.shape(grid), 4)) * 255).astype(np.uint8)),
+            data=np.ascontiguousarray((rgba_flat.reshape((*np.shape(grid), 4)) * 255).astype(npuint_t)),
             smooth=True,
             sliceDensity=1
         )
 
         self._view.addItem(self.__volume)
-    def update(self, grid: array_t) -> None:
+    def update(self, grid: farray_t) -> None:
         if self.__volume is None:
             raise RuntimeError("Volume plot has not been drawn yet")
 
@@ -84,6 +84,6 @@ class VolumePlotWindow(PlotWindow):
         rgba_flat = self._cmap.map(flatten, mode='float')
         rgba_flat[..., 3] = flatten / np.max(flatten)
 
-        self.__volume.setData(np.ascontiguousarray((rgba_flat.reshape((*np.shape(grid), 4)) * 255).astype(np.uint8)))
+        self.__volume.setData(np.ascontiguousarray((rgba_flat.reshape((*np.shape(grid), 4)) * 255).astype(npuint_t)))
 
 __all__ = ['PlotWindowSpec', 'ScatterPlotWindow', 'VolumePlotWindow']

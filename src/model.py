@@ -1,7 +1,8 @@
 # python internals
 from __future__ import annotations
 # internal packages
-from ntypes import *
+from .ntypes import *
+from .cache import Cache
 # external packages
 import numpy as np
 from scipy.special import genlaguerre as laguerre
@@ -31,6 +32,7 @@ class StateSpec:
 class State:
     def __init__(self, spec: StateSpec) -> None:
         self.__specs = spec
+        self.__cache = Cache()
     @property
     def specs(self) -> StateSpec:
         return self.__specs
@@ -38,10 +40,10 @@ class State:
         scale = 1.0
         px = np.asarray(legendre(abs(self.__specs.m), self.__specs.l, np.cos(p.theta)), dtype=complex)
         angle = (-1) ** abs(self.__specs.m) * np.sqrt(((2 * self.__specs.l + 1) * fact(self.__specs.l - abs(self.__specs.m))) / (4 * np.pi * fact(self.__specs.l + abs(self.__specs.m)))) * px * np.exp(1j * abs(self.__specs.m) * p.phi)
-        la = np.asarray(laguerre(self.__specs.n - self.__specs.l - 1, 2 * self.__specs.l + 1)(2 * p.r / (self.__specs.n * scale)), dtype=np.float32)
+        la = np.asarray(laguerre(self.__specs.n - self.__specs.l - 1, 2 * self.__specs.l + 1)(2 * p.r / (self.__specs.n * scale)), dtype=npfloat_t)
         radius = p.r ** self.__specs.l * (2 / (self.__specs.n * scale)) ** (self.__specs.l + 1) * la * np.exp(-p.r / (self.__specs.n * scale))
-        return np.asarray(radius * angle * np.exp(-1j*self.en_val()*t), dtype=np.complex64)
-    def en_val(self) -> array_t:
+        return np.asarray(radius * angle * np.exp(-1j*self.en_val()*t), dtype=npcomplex_t)
+    def en_val(self) -> farray_t:
         mu = 1.0; alpha = 0.01; c = 300000.0
         return -mu * c ** 2 * (-1 + np.sqrt(1 + (2 * alpha ** 2) / (self.__specs.n - np.abs(self.__specs.l + 0.5) - 0.5 + np.sqrt((np.abs(self.__specs.l + 0.5) + 0.5) ** 2 - alpha ** 2))))
 
@@ -54,12 +56,12 @@ class Atom:
         theta = np.linspace(0, np.pi, dims.angle_dim)
         phi = np.linspace(0, 2 * np.pi, dims.angle_dim)
         return SphCoords(*(np.meshgrid(r, theta, phi, indexing='ij')),)
-    def __mask(self, p: SphCoords, t: float = 0) -> array_t:
-        pr_sum = np.sum((np.abs(state.wf_val(p, t)) ** 2 for state in self.__states), axis=0)
+    def __mask(self, p: SphCoords, t: float = 0) -> farray_t:
+        pr_sum = np.sum(np.array([np.abs(state.wf_val(p, t)) ** 2 for state in self.__states]), axis=0)
         cutoff = pr_sum.max() * 0.001
         return pr_sum > cutoff
-    def pr_val(self, p: SphCoords, t: float = 0) ->  array_t:
-        psi = np.sum(np.array([state.wf_val(p, t) for state in self.__states], dtype=complex), axis=0)
+    def pr_val(self, p: SphCoords, t: float = 0) ->  farray_t:
+        psi = np.sum(np.array([state.wf_val(p, t) for state in self.__states], dtype=npcomplex_t), axis=0)
         return np.abs(psi) ** 2
     def sph_scatter(self, t: float = 0, dims: SphDims = SphDims(200, 160)) -> SphScatter:
         p = self.__points(dims)
@@ -69,7 +71,7 @@ class Atom:
     def cart_scatter(self, *args) -> CartScatter:
         el = self.sph_scatter(*args)
         return CartScatter(el.r * np.sin(el.theta) * np.cos(el.phi), el.r * np.sin(el.theta) * np.sin(el.phi), el.r * np.cos(el.theta), el.psi)
-    def cart_grid(self, t: float = 0, method: interpolation_t = 'nearest', dims: CartDims = CartDims(150, 150, 150)) -> array_t:
+    def cart_grid(self, t: float = 0, method: interpolation_t = 'nearest', dims: CartDims = CartDims(150, 150, 150)) -> farray_t:
         sc = self.cart_scatter(t, dims.to_sph())
         xi = np.linspace(np.min(sc.x), np.max(sc.x), dims.x_dim)
         yi = np.linspace(np.min(sc.y), np.max(sc.y), dims.y_dim)
