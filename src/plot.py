@@ -48,42 +48,41 @@ class ScatterPlotWindow(PlotWindow):
     def draw(self, sc: CartScatter) -> None:
         if self.__scatter is not None:
             self._view.removeItem(self.__scatter)
-        self.__scatter = gl.GLScatterPlotItem(pos=np.column_stack(sc.coords()), color=self._cmap.map(sc.psi, mode='float'), size=1)
+        self.__scatter = gl.GLScatterPlotItem(pos=np.column_stack(sc.coords()), color=self._cmap.map(sc.prob, mode='float'), size=1)
         self._view.addItem(self.__scatter)
     def update(self, sc: CartScatter) -> None:
         if self.__scatter is None:
             raise RuntimeError("Scatter plot has not been drawn yet.")
-        self.__scatter.setData(color=self._cmap.map(sc.psi, mode='float'))
+        self.__scatter.setData(color=self._cmap.map(sc.prob, mode='float'))
 
 class VolumePlotWindow(PlotWindow):
     def __init__(self, spec: PlotWindowSpec = PlotWindowSpec()) -> None:
         super().__init__(spec)
         self.__volume: Optional[gl.GLVolumeItem] = None
-    def draw(self, grid: farray_t) -> None:
+    def draw(self, grid: CartGrid) -> None:
         if self.__volume is not None:
             self._view.removeItem(self.__volume)
 
-        flatten = np.ravel(np.clip(grid, 0, None))
-
+        flatten = np.ravel(np.clip(grid.data, 0, None))
         rgba_flat = self._cmap.map(flatten, mode='float')
         rgba_flat[..., 3] = flatten / np.max(flatten)
 
         self.__volume = gl.GLVolumeItem(
-            data=np.ascontiguousarray((rgba_flat.reshape((*np.shape(grid), 4)) * 255).astype(npuint_t)),
+            data=np.ascontiguousarray((rgba_flat.reshape((*np.shape(grid.data), 4)) * 255).astype(npuint_t)),
             smooth=True,
             sliceDensity=1
         )
 
         self._view.addItem(self.__volume)
-    def update(self, grid: farray_t) -> None:
+    def update(self, grid: CartGrid) -> None:
         if self.__volume is None:
             raise RuntimeError("Volume plot has not been drawn yet")
 
-        flatten = np.ravel(np.clip(grid, 0, None))
+        flatten = np.ravel(np.clip(grid.data, 0, None))
 
         rgba_flat = self._cmap.map(flatten, mode='float')
         rgba_flat[..., 3] = flatten / np.max(flatten)
 
-        self.__volume.setData(np.ascontiguousarray((rgba_flat.reshape((*np.shape(grid), 4)) * 255).astype(npuint_t)))
+        self.__volume.setData(np.ascontiguousarray((rgba_flat.reshape((*np.shape(grid.data), 4)) * 255).astype(npuint_t)))
 
 __all__ = ['PlotWindowSpec', 'ScatterPlotWindow', 'VolumePlotWindow']
