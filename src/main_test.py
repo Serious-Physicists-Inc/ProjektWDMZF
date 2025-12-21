@@ -17,13 +17,12 @@ from PyQt6.QtCore import Qt
 class Settings:
     interactive: bool = True
     fps: int = 30
-    speed: float = 0.00001
+    speed: float = 0.0001
     plot_type: Literal['ScatterPlot', 'VolumePlot'] = 'ScatterPlot'
     plot_colormap: colormap_t = 'plasma'
     plot_interpolation: interpolation_t = 'nearest'
 
-def launch_custom_plot(atom: Atom, settings: Settings) -> Tuple[
-    Union[ScatterPlotWindow, VolumePlotWindow], Optional[Interval]]:
+def launch_custom_plot(atom: Atom, settings: Settings) -> Tuple[Union[ScatterPlotWindow, VolumePlotWindow], Optional[Interval]]:
 
     plotter = AtomPlotter(atom, SphDims(100, 100))
 
