@@ -3,66 +3,83 @@
 \usepackage[T1]{fontenc}
 \usepackage{indentfirst}
 \usepackage{polski}
-\usepackage{graphicx}
 \usepackage[margin=2.5cm]{geometry}
-\usepackage{float}
 \usepackage{amsmath}
 \usepackage{amssymb}
+\usepackage{url}
 \usepackage{array}
 
-\title{Dokumentacja projektu}
-\author{Mikołaj Suszek, Hubert Rączkiewicz}
-\date{8 grudnia 2025}
+\title{Dokumentacja techniczna projektu\\
+\large Wersja 2}
+\author{Hubert Rączkiewicz, Mikołaj Suszek}
+\date{22 grudnia 2025}
 
 \begin{document}
 \maketitle
 \section{Wstęp}
-Odkryte przez Erwina Schrödingera równanie falowe legło u podstaw nowego działu fizyki – mechaniki kwantowej. Dokonany przełom znalazł zastsowanie w wielu dziedzinach nauk ścisłych. 
+\par Odkryte przez Erwina Schrödingera równanie falowe legło u podstaw nowego działu fizyki - mechaniki kwantowej. Dokonany przełom znalazł zastsowanie w wielu dziedzinach nauk ścisłych. 
 \section{Cel projektu}
-Celem projektu jest utworzenie interaktywnej animacji wizualizującej poszczególne stany energetyczne w atomie wodoru, zarówno dla ustalonych liczb kwantowych jak i stanów przejściowych. Pozwoli to na lepsze zrozumienie konfiguracji elektronowych i wynikających z nich właściwości chemicznych i fizycznych wodoru.
-\section{Opis modelowania zjawiska fizycznego}
-Mianem chmury elektronowej w atomie określa się zagęszczenie  prawdopodobieństwa znalezienia elektronu w danym punkcie w przestrzeni. Jej kształt uzależniony jest od trzech liczb kwantowych: głównej, pobocznej i magnetycznej. Przy czym, liczby główna i poboczna wpływają na radialny rozkład prawdopodobieństwa, zaś na rozkład kątowy określają liczby poboczna i magnetyczna. Ilościowo prawdopodobieństwo znalezienia elektronu w danym punkcie opisuje kwadrat modułu funkcji falowej elektronu. Istotą problemu jest analityczne lub numeryczne wyznaczenie funkcji falowej, będącej rozwiązaniem równania Schrödingera. Obecnie, równania Schrödingera zostało rozwiązane analitycznie wyłącznie dla atomu wodoru. Otrzymana funkcja falowa dana jest wzorem:
+\par Celem projektu jest utworzenie interaktywnej animacji wizualizującej poszczególne stany energetyczne w atomie wodoru, zarówno dla ustalonych liczb kwantowych jak i stanów przejściowych. Pozwoli to na lepsze zrozumienie konfiguracji elektronowych i wynikających z nich właściwości chemicznych i fizycznych wodoru.
+\section{Opis zjawiska fizycznego}
+\par Mianem chmury elektronowej w atomie określa się zagęszczenie  prawdopodobieństwa znalezienia elektronu w danym punkcie w przestrzeni. Jej kształt uzależniony jest od trzech liczb kwantowych: głównej, pobocznej i magnetycznej. Przy czym, liczby główna i poboczna wpływają na radialny rozkład prawdopodobieństwa, zaś rozkład kątowy określają liczby poboczna i magnetyczna. 
+\par Ilościowo prawdopodobieństwo znalezienia elektronu w danym punkcie opisuje kwadrat modułu funkcji falowej elektronu. Istotą problemu jest analityczne lub numeryczne wyznaczenie funkcji falowej, będącej rozwiązaniem równania Schrödingera. Obecnie, równanie to zostało rozwiązane analitycznie wyłącznie dla atomu wodoru. Otrzymana funkcja falowa dana jest wzorem:
 \begin{equation}
      \Psi(r,\theta,\varphi,t)= r^l\left ( \frac{2}{na_0}\right )^{l+1}L_{n-l-1}^{2l+1}\left (\frac{2r}{na_0}\right )e^{-r/na_0} \cdot(-1)^m\sqrt{\frac{(2l+1)(l-m)!}{4\pi(l+m)!}}P_{l,m}(\cos\theta) e^{im\varphi}\cdot e^{\frac{iEt}{\hslash}}
 \end{equation}
 \section{Opis wykorzystywanych narzędzi}
-wersja języka Python: 3.9, IDE: Pycharm, wstępnie wytypowane do użycia biblioteki: NumPy, SymPy, SciPy, MatplotLib, PyVista
-\section{Ogólny opis projektu i możliwe alternatywy}
+\par Kod projektu będzie napisany w języku Python zgodnie ze standardem wersji: 3.9. Kod będzie podzielony pod względem funkcjonalności na moduły. Rozwój projektu i testy zostaną przeprowadzone w zintegrowanym środowisku programistycznym PyCharm. Wstępnie do bezpośredniego wykorzystania wytypowano biblioteki:
+\begin{enumerate}
+    \item NumPy, SciPy - do przeprowadzania obliczeń numerycznych
+    \item SymPy - do interpolacji danych
+    \item PyQt, PyQtGraph - do stworzenia graficznego interfejsu użytkownika i rysowania wykresów
+\end{enumerate}
+\section{Ogólny opis projektu}
 Elementy bazowe:
 \begin{itemize}
-    \item Moduł obliczający wartości funkcji falowej atomu wodoru w stanie stacjonarnym dla danych liczb kwantowych i na ich podstawie wyznaczający rozkład prawdopodobieństwa znalezienia elektronu.
-    \item Moduł generujący siatkę przestrzeni do wizualizacji wartości.
-    \item Zestaw funkcji pomocniczych m.in. konwertujących wartości między układami współrzędnych przestrzennych.
-    \item Interaktywny moduł wizualizujący obliczone wartości.
+    \item Moduł wprowadzający typy i klasy pomocnicze.
+    \item Moduł obliczający wartości funkcji falowej atomu wodoru i na ich podstawie generujący dane do wykresów.
+    \item Moduł odpowiedzialny za graficzny interfejs użytkownika, pozwalający w przystępny sposób zmianiać parametry wejściowe programu.
+    \item Moduł wizualizujący na wykresach obliczone wartości.
 \end{itemize}
 Elementy dodatkowe:
 \begin{itemize}
-    \item Moduł obliczający wartości funkcji falowej atomu wodoru w superpozycji stanów energetycznych (w trakcie przejść elektronowych).
-    \item Zestaw funkcji optymalizujących szybkość działania programu.
-    \item Plik wykonywalny uruchamiający program poza konsolą.
+    \item Moduł interwału czasowego umożliwiający dynamiczne odświeżanie wykresu dla (niestacjonarnych) stanów przejściowych atomu wodoru.
+    \item Zestaw klas i funkcji pomocniczych optymalizujących szybkość działania programu.
+    \item Plik wykonywalny, pakujący ogół funkcjonalności programu i uruchamiający go poza konsolą.
 \end{itemize}
 \section{Specyficzne wymagania}
-a) wymagania funkcjonalne:
+a) wymagania funkcjonalne, program:
 \begin{itemize}
-    \item Program oblicza wartości funkcji falowej atomu wodoru dla danej siatki przestrzennej oraz określonych liczb kwantowych.
-    \item Na podstawie wcześniej wyliczonych wartości funkcji falowej wyznacza lokalną gęstość prawdopodobieństwa znalezienia elektronu w punkcie przestrzeni.
-    \item Wizualizuje gęstość prawdopodobieństwa na trójwymiarowym wykresie. 
+    \item oblicza wartości funkcji falowej atomu wodoru dla danej siatki przestrzennej oraz określonych liczb kwantowych
+    \item wizualizuje gęstość prawdopodobieństwa na trójwymiarowym, interaktywnym wykresie punktowym lub objętościowym
+    \item dynamicznie odświeża wykres dla stanów niestacjonarnych 
+    \item umożliwia tworzenie migawek wykresów (zapis chwilowego stanu w postaci pliku graficznego na dysku)
 \end{itemize}
-b) wymagania niefunkcjonalne:
+b) wymagania niefunkcjonalne, program:
 \begin{itemize}
-    \item Przy użyciu wielorakich metod optymalizuje czas obliczeń.
-    \item Umożliwia zmianę parametrów wejściowych z poziomu programu.
-    \item Pakuje zawarte funkcjonalności w pojedynczy plik wykonywalny.
+    \item pozwala na zmianę parametrów wejściowych z poziomu graficznego interfejsu użytkownika
+    \item umożliwia płynne generowanie obrazu na poziomie 20 klatek na sekundę na przeciętnym urządzeniu
+    \item pakuje zawarte funkcjonalności w pojedynczy plik wykonywalny
 \end{itemize}
-\section{Harmonogram pracy z zadaniami do wykonania}
+\section{Harmonogram pracy nad projektem}
 \begin{table}[hbpt!!]
 \centering
 \begin{tabular}{| m{5cm} | m{10cm} |}
 \hline
-Tydzień 1 (8.12.2025 - 14.12.2025) & Opracowanie szkieletu projektu. Utworzenie repozytorium Git, poszczególnych modułów wraz z szkicem ich funkcjonalności. \\ \hline
-Tydzień 2 (15.12.2025 - 4.01.2026) & Praca nad modułem wyliczającym wartości funkcji falowej dla poszczególnych liczb kwantowych atomu wodoru. Opracowanie modułu liczącego gęstość prawdopodobieństwa na podstawie wejściowych wartości funkcji falowej. \\ \hline
-Tydzień 3 (5.01.2026 - 11.01.2026) & Praca nad wizualizacją danych.= Dodanie możliwości zmiany parametrów danych wejściowych w trakcie wykonywania programu. \\ \hline
-Tydzień 4 (12.01.2026 - 18.01.2026) & Optymalizacja kodu. Podniesienie niezawodności na błędy numeryczne. Utworzenie pliku wykonywalnego programu. \\ \hline
+Tydzień 1 (8.12.2025 - 14.12.2025) & Opracowanie szkieletu projektu. Utworzenie repozytorium Git\footnotemark[1], poszczególnych modułów wraz z zarysem ich funkcjonalności. \\ \hline
+Tydzień 2 (15.12.2025 - 4.01.2026) & Praca nad modułem wyliczającym wartości funkcji falowej, modułem wizualizującym dane na wykresie i modułem dynamicznie aktualizującym dane. \\ \hline
+Tydzień 3 (5.01.2026 - 11.01.2026) & Dalsza praca nad wizualizacją danych. Dodanie graficznego interfejsu użytkownika. Implementacja technik optymalizacyjnych - obliczanie wartości stałych, odwleczenie wykonania, przechowywanie wartości obliczonych (\textit{caching}), ucinanie (pomijanie) klatek. \\ \hline
+Tydzień 4 (12.01.2026 - 18.01.2026) & Dalsza optymalizacja kodu. Podniesienie niezawodności na błędy w trakcie wykonywania. Utworzenie pliku wykonywalnego programu. \\ \hline
 \end{tabular}
 \end{table}
+\section{Zmiany względem wersji 1}
+\par W związku z częściową zmianą koncepcji realizacji projektu i koniecznością poprawy opisu wymagań funkcjonalnych i niefunkcjonalnych sporządzono wersję~2 dokumentacji technicznej projektu. Względem wersji~1, dokonano następujących zmian:
+\begin{enumerate}
+    \item Poprawiono opis wymagań funkcjonalnych i niefunkcjonalnych programu
+    \item Zmieniono opis narzędzi planowanych do wykorzystania w zakresie bibliotek interfejsu graficznego.
+    \item Zmodyfikowano harmonogram wykonywania projektu w zakresie zadań niezrealizowanych. Wybrane zagadnienia przesunięto do szybszego wykonania, precyzyjniej rozdzielono złożone zadania. Dokonane zmiany nie powinny wpłynąć na czas zakończenia prac nad projektem. 
+    \item Dodano link do repozytorium Github
+    \item Wybrane fragmenty zmieniono pod względem stylistycznym, aby bardziej akuratnie odzwierciedlały założenia projektu
+\end{enumerate}
+\footnotetext[1]{Link do repozytorium Github: \url{https://github.com/Serious-Physicists-Inc/ProjektWDMZF}{}}
 \end{document}
