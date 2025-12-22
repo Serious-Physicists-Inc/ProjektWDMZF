@@ -2,3 +2,6 @@
 !.idea/runConfigurations/
 .venv/
 src/__pycache__
+docs/
+!docs/main.pdf
+!docs/main.tex
