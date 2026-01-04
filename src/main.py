@@ -1,10 +1,10 @@
 # python internals
 from __future__ import annotations
-from typing import Tuple, Union, Callable, Literal, Optional, Any
+from typing import Tuple, Union, Callable, Literal, Optional
 from dataclasses import dataclass
 import sys
 # internal packages
-from .ntypes import interpolation_t, colormap_t, SphDims
+from .ntypes import interpolation_t, colormap_t, SphDims, CartScatter, CartGrid
 from .model import StateSpec, State, Atom, AtomPlotter
 from .plot import *
 from .interval import *
@@ -16,7 +16,7 @@ class Settings:
     interactive: bool = True
     fps: int = 30
     speed: float = 1
-    plot_type: Literal['ScatterPlot', 'VolumePlot'] = 'ScatterPlot'
+    plot_type: Literal['ScatterPlot', 'VolumePlot'] = 'VolumePlot'
     plot_colormap: colormap_t = 'plasma'
     plot_interpolation: interpolation_t = 'nearest'
 
@@ -44,7 +44,7 @@ def main() -> Tuple[Union[ScatterPlotWindow, VolumePlotWindow], Optional[Interva
     interval: Optional[Interval] = None
     if settings.interactive:
         dt = 1.0 / settings.fps
-        callback: Callable[[int], Any] = lambda i: plotter.cart_scatter(i*settings.speed*dt).masked() if settings.plot_type == 'ScatterPlot' else lambda j: plotter.cart_grid(j*settings.speed*dt, settings.plot_interpolation)
+        callback: Callable[[int], Union[CartScatter, CartGrid]] = (lambda i: plotter.cart_scatter(i*settings.speed*dt).masked()) if settings.plot_type == 'ScatterPlot' else (lambda j: plotter.cart_grid(j*settings.speed*dt, settings.plot_interpolation))
         interval = plot.auto_update(callback, dt)
         interval.start()
 
