@@ -32,6 +32,24 @@ class PlotWindow:
         self._cmap = pg.colormap.get(spec.cmap_name)
 
         self._view.setCameraPosition(distance = 10.0, elevation = 20.0, azimuth = 45.0)
+
+        self._view.closeEvent = self._on_close_event
+
+    def _on_close_event(self, event):
+        # This method runs when "X" is pressed.
+
+        # 1. Clear items to stop painting immediately
+        self._view.items = []
+
+        # 2. Schedule the widget for destruction
+        self._view.deleteLater()
+
+        # 3. Accept the event (tell Qt "yes, close this")
+        event.accept()
+
+    def close(self) -> None:
+        self._view.close()
+
     def draw(self, data: Union[CartScatter, CartGrid]) -> None:
         pass
     def update(self, data: Union[CartScatter, CartGrid]) -> None:
@@ -54,6 +72,11 @@ class ScatterPlotWindow(PlotWindow):
         if self.__scatter is None:
             raise RuntimeError("Scatter plot has not been drawn yet.")
         self.__scatter.setData(color=self._cmap.map(sc.prob, mode='float'))
+
+        self.__scatter.setData(
+            pos=np.column_stack(sc.coords()),  # <--- Update Positions!
+            color=self._cmap.map(sc.prob, mode='float')
+        )
 
 class VolumePlotWindow(PlotWindow):
     def __init__(self, spec: PlotWindowSpec = PlotWindowSpec()) -> None:

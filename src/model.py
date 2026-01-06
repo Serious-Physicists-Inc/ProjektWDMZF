@@ -38,7 +38,7 @@ class State:
     def wave_func(self, p: SphCoords) -> WaveFunction:
         return WaveFunction(self, p)
     def energy(self) -> farray_t:
-        mu = 1.0; alpha = 0.01; c = 299792458.0
+        mu = 1.0; alpha = 1.0 / 137.036; c = 1.0 / alpha
         return -mu * c ** 2 * (-1 + np.sqrt(1 + (2 * alpha ** 2) / (self.spec.n - np.abs(self.spec.l + 0.5) - 0.5 + np.sqrt((np.abs(self.spec.l + 0.5) + 0.5) ** 2 - alpha ** 2))))
 
 class WaveFunction:
