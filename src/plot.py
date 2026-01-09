@@ -23,6 +23,10 @@ class PlotWindow:
         self._view.setWindowTitle(spec.title)
         self._view.setBackgroundColor(spec.bg_color)
 
+        self._is_closed = False
+
+        self._view.closeEvent = self._on_close_event
+
         self._grid = None
         if spec.show_grid:
             self._grid = gl.GLGridItem()
@@ -33,22 +37,33 @@ class PlotWindow:
 
         self._view.setCameraPosition(distance = 10.0, elevation = 20.0, azimuth = 45.0)
 
-        self._view.closeEvent = self._on_close_event
+    def _cleanup(self):
+        if self._view.isVisible():
+            self._view.hide()
+
+        self._is_closed = True
+        try:
+            for item in self._view.items[:]:
+                try:
+                    self._view.removeItem(item)
+                except:
+                    pass
+            self._view.items = []
+
+            self._view.deleteLater()
+
+        except RuntimeError:
+            pass
 
     def _on_close_event(self, event):
-        # This method runs when "X" is pressed.
+        self._cleanup()
 
-        # 1. Clear items to stop painting immediately
-        self._view.items = []
-
-        # 2. Schedule the widget for destruction
-        self._view.deleteLater()
-
-        # 3. Accept the event (tell Qt "yes, close this")
         event.accept()
 
     def close(self) -> None:
-        self._view.close()
+        if not self._is_closed:
+            self._cleanup()
+            self._view.close()
 
     def draw(self, data: Union[CartScatter, CartGrid]) -> None:
         pass
@@ -69,14 +84,20 @@ class ScatterPlotWindow(PlotWindow):
         self.__scatter = gl.GLScatterPlotItem(pos=np.column_stack(sc.coords()), color=self._cmap.map(sc.prob, mode='float'), size=1)
         self._view.addItem(self.__scatter)
     def update(self, sc: CartScatter) -> None:
-        if self.__scatter is None:
-            raise RuntimeError("Scatter plot has not been drawn yet.")
-        self.__scatter.setData(color=self._cmap.map(sc.prob, mode='float'))
+        if self._is_closed or self.__scatter is None:
+            return
 
-        self.__scatter.setData(
-            pos=np.column_stack(sc.coords()),  # <--- Update Positions!
-            color=self._cmap.map(sc.prob, mode='float')
-        )
+        try:
+            self.__scatter.setData(
+                pos=np.column_stack(sc.coords()),
+                color=self._cmap.map(sc.prob, mode='float')
+            )
+        except Exception:
+            pass
+
+    def _cleanup(self):
+        self.__scatter = None
+        super()._cleanup()
 
 class VolumePlotWindow(PlotWindow):
     def __init__(self, spec: PlotWindowSpec = PlotWindowSpec()) -> None:
@@ -97,15 +118,23 @@ class VolumePlotWindow(PlotWindow):
         )
 
         self._view.addItem(self.__volume)
+
     def update(self, gr: CartGrid) -> None:
-        if self.__volume is None:
-            raise RuntimeError("Volume plot has not been drawn yet")
+        if self._is_closed or self.__volume is None:
+            return
 
-        flatten = np.ravel(np.clip(gr.data, 0, None))
+        try:
+            flatten = np.ravel(np.clip(gr.data, 0, None))
+            rgba_flat = self._cmap.map(flatten, mode='float')
+            rgba_flat[..., 3] = flatten / np.max(flatten)
 
-        rgba_flat = self._cmap.map(flatten, mode='float')
-        rgba_flat[..., 3] = flatten / np.max(flatten)
+            self.__volume.setData(
+                np.ascontiguousarray((rgba_flat.reshape((*np.shape(gr.data), 4)) * 255).astype(npuint_t)))
+        except Exception:
+            pass
 
-        self.__volume.setData(np.ascontiguousarray((rgba_flat.reshape((*np.shape(gr.data), 4)) * 255).astype(npuint_t)))
+    def _cleanup(self):
+        self.__volume = None
+        super()._cleanup()
 
 __all__ = ['PlotWindowSpec', 'ScatterPlotWindow', 'VolumePlotWindow']

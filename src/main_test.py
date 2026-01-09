@@ -288,17 +288,16 @@ class Window(QWidget):
                 try:
                     self.current_interval.stop()
                 except RuntimeError:
-                    # Timer might already be deleted if window was closed
                     pass
                 self.current_interval = None
 
             if self.current_plot is not None:
                 try:
-                    # We try to close it manually (in case it's still open)
+                    if hasattr(self.current_plot, '_view'):
+                        self.current_plot._view.hide()
+
                     self.current_plot.close()
-                except RuntimeError:
-                    # This catches the case where "X" was already pressed
-                    # and the underlying C++ object is already deleted.
+                except:
                     pass
                 self.current_plot = None
 
