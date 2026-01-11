@@ -6,15 +6,12 @@ import sys
 from .ntypes import interpolation_t, ColormapT, SphDims
 from .model import StateSpec, State, Atom, AtomPlotter
 from .plot import *
-<<<<<<< HEAD
 from src.scheduler import *
-=======
 from .interval import *
 
 from PyQt6.QtWidgets import QApplication, QWidget, QVBoxLayout, QTabWidget, QCheckBox, QPushButton, QFormLayout, QLineEdit, QLabel, QMessageBox, QSlider, QHBoxLayout, QScrollArea, QFrame, QSizePolicy
 from PyQt6.QtCore import Qt, QPropertyAnimation, QEasingCurve, pyqtProperty, QRectF
 from PyQt6.QtGui import QPainter, QColor, QPen, QFont
->>>>>>> 7a7140f92c309d7fd5912e8f0c3e3bd47f48f798
 
 from PyQt6.QtWidgets import QApplication, QWidget, QVBoxLayout, QTabWidget, QCheckBox, QPushButton, QFormLayout, QLineEdit, QLabel, QMessageBox
 
@@ -23,11 +20,8 @@ from PyQt6.QtWidgets import QApplication, QWidget, QVBoxLayout, QTabWidget, QChe
 class Settings:
     interactive: bool = True
     fps: int = 30
-<<<<<<< HEAD
     speed: float = 1
-=======
     speed: float = 60.0
->>>>>>> 7a7140f92c309d7fd5912e8f0c3e3bd47f48f798
     plot_type: Literal['ScatterPlot', 'VolumePlot'] = 'ScatterPlot'
     plot_colormap: ColormapT = 'plasma'
     plot_interpolation: interpolation_t = 'nearest'
