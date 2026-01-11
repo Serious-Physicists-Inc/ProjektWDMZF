@@ -1,25 +1,23 @@
 from __future__ import annotations
-from typing import Tuple, Union, Callable, Literal, Optional, Any
+from typing import Tuple, Union, Literal
 from dataclasses import dataclass
 import sys
 
-from .ntypes import interpolation_t, colormap_t, SphDims
+from .ntypes import interpolation_t, ColormapT, SphDims
 from .model import StateSpec, State, Atom, AtomPlotter
 from .plot import *
-from .interval import *
+from src.scheduler import *
 
-from PyQt6.QtWidgets import QApplication, QWidget, QVBoxLayout, QTabWidget, QCheckBox, QPushButton, QFormLayout, QLineEdit, QLabel, QMessageBox, QSlider
-from PyQt6.QtCore import Qt
-
+from PyQt6.QtWidgets import QApplication, QWidget, QVBoxLayout, QTabWidget, QCheckBox, QPushButton, QFormLayout, QLineEdit, QLabel, QMessageBox
 
 
 @dataclass
 class Settings:
     interactive: bool = True
     fps: int = 30
-    speed: float = 0.0001
+    speed: float = 1
     plot_type: Literal['ScatterPlot', 'VolumePlot'] = 'ScatterPlot'
-    plot_colormap: colormap_t = 'plasma'
+    plot_colormap: ColormapT = 'plasma'
     plot_interpolation: interpolation_t = 'nearest'
 
 def launch_custom_plot(atom: Atom, settings: Settings) -> Tuple[Union[ScatterPlotWindow, VolumePlotWindow], Optional[Interval]]:

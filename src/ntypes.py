@@ -1,22 +1,22 @@
 # python internals
 from __future__ import annotations
-from typing import NamedTuple, Literal
+from typing import Tuple, NamedTuple, Literal
 import math
 # external packages
 import numpy as np
 import numpy.typing as npt
 
 # type hints definitions
-npfloat_t = np.float64
-npuint_t = np.uint8
-npcomplex_t = np.complex128
-array_t = np.ndarray
-farray_t = npt.NDArray[npfloat_t]
-uarray_t = npt.NDArray[npuint_t]
-carray_t = npt.NDArray[npcomplex_t]
-barray_t = npt.NDArray[bool]
-colormap_t = Literal['plasma', 'inferno', 'viridis', 'turbo', 'cividis']
-interpolation_t = Literal['nearest', 'linear', 'cubic']
+NPFloatT = np.float32
+NPIntT = np.int32
+NPUintT = np.uint8
+NPComplexT = np.complex64
+NPArrayT = np.ndarray
+NPFArrayT = npt.NDArray[NPFloatT]
+NPUArrayT = npt.NDArray[NPUintT]
+NPCArrayT = npt.NDArray[NPComplexT]
+NPBArrayT = npt.NDArray[bool]
+ColormapT = Literal['plasma', 'inferno', 'viridis', 'turbo', 'cividis']
 
 # type definitions
 class SphDims(NamedTuple):
@@ -33,28 +33,30 @@ class CartDims(NamedTuple):
         angle_dim = math.ceil((self.x_dim + self.y_dim + self.z_dim - r_dim) / 2)
         return SphDims(r_dim, angle_dim)
 
-class SphCoords(NamedTuple):r: farray_t; theta: farray_t; phi: farray_t
+class SphPointsGrid(NamedTuple):
+    r: NPFArrayT; theta: NPFArrayT; phi: NPFArrayT
+    def ravel(self):
+        return SphPoints(self.r.ravel(), self.theta.ravel(), self.phi.ravel())
+class CartPointsGrid(NamedTuple):
+    x: NPFArrayT; y: NPFArrayT; z: NPFArrayT
+    def ravel(self):
+        return CartPoints(self.x.ravel(), self.y.ravel(), self.z.ravel())
 
-class CartCoords(NamedTuple): x: farray_t; y: farray_t; z: farray_t
+class SphPoints(NamedTuple): r: NPFArrayT; theta: NPFArrayT; phi: NPFArrayT
+class CartPoints(NamedTuple): x: NPFArrayT; y: NPFArrayT; z: NPFArrayT
 
-class SphScatter(NamedTuple):
-    r: farray_t; theta: farray_t; phi: farray_t; prob: farray_t
-    def coords(self) -> SphCoords: return SphCoords(self.r, self.theta, self.phi)
-    def masked(self, factor: float = 0.001) -> SphScatter:
-        cutoff = np.max(self.prob) * factor
-        mask = self.prob > cutoff
-        return SphScatter(*(comp[mask] for comp in (self.r, self.theta, self.phi, self.prob)))
+class Scatter(NamedTuple):
+    points: CartPoints
+    val: NPFArrayT
+    def masked(self, factor: float = 0.001) -> Scatter:
+        cutoff = np.max(self.val) * factor
+        mask = self.val > cutoff
+        return Scatter(CartPoints(*(arr[mask] for arr in self.points)), self.val[mask])
 
-class CartScatter(NamedTuple):
-    x: farray_t; y: farray_t; z: farray_t; prob: farray_t
-    def coords(self) -> CartCoords: return CartCoords(self.x, self.y, self.z)
-    def masked(self, factor: float = 0.001) -> CartScatter:
-        cutoff = np.max(self.prob) * factor
-        mask = self.prob > cutoff
-        return CartScatter(*(comp[mask] for comp in (self.x, self.y, self.z, self.prob)))
+class Volume(NamedTuple):
+    val: NPFArrayT
+    def masked(self, factor: float = 0.001) -> Volume:
+        cutoff = np.max(self.val) * factor
+        return Volume(np.where(self.val > cutoff, self.val, 0.0))
 
-class CartGrid:
-    def __init__(self, grid: farray_t):
-        self.data = grid
-
-__all__ = ['npfloat_t', 'npuint_t', 'npcomplex_t', 'array_t', 'farray_t', 'uarray_t', 'carray_t', 'barray_t', 'interpolation_t', 'colormap_t', 'SphDims', 'CartDims', 'SphCoords', 'CartCoords', 'SphScatter', 'CartScatter', 'CartGrid']
+__all__ = ['NPFloatT', 'NPIntT', 'NPUintT', 'NPComplexT', 'NPArrayT', 'NPFArrayT', 'NPUArrayT', 'NPCArrayT', 'NPBArrayT', 'ColormapT', 'SphDims', 'CartDims', 'SphPointsGrid', 'CartPointsGrid', 'SphPoints', 'CartPoints', 'Scatter', 'Volume']

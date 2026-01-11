@@ -4,51 +4,56 @@ from typing import Tuple, Union, Callable, Literal, Optional
 from dataclasses import dataclass
 import sys
 # internal packages
-from .ntypes import interpolation_t, colormap_t, SphDims, CartScatter, CartGrid
-from .model import StateSpec, State, Atom, AtomPlotter
+from .ntypes import ColormapT, SphDims, Scatter, Volume
+from .model import StateSpec, State, Atom, Plotter
+from .scheduler import Scheduler
 from .plot import *
-from .interval import *
 # external packages
 from PyQt6.QtWidgets import QApplication
 
 @dataclass
 class Settings:
     interactive: bool = True
-    fps: int = 30
+    fps: int = 20
     speed: float = 1
     plot_type: Literal['ScatterPlot', 'VolumePlot'] = 'VolumePlot'
-    plot_colormap: colormap_t = 'plasma'
-    plot_interpolation: interpolation_t = 'nearest'
+    plot_colormap: ColormapT = 'plasma'
 
 app = QApplication(sys.argv)
 settings: Settings = Settings()
 
-def main() -> Tuple[Union[ScatterPlotWindow, VolumePlotWindow], Optional[Interval]]:
+def main() -> Tuple[Union[ScatterPlotWindow, VolumePlotWindow], Optional[Scheduler]]:
     states = (State(StateSpec(1, 0, 0)),State(StateSpec(2, 1, 0)))
     atom = Atom(*states)
-    plotter = AtomPlotter(atom, SphDims(100, 100))
 
     plot_spec: PlotWindowSpec = PlotWindowSpec(
         title="Electron cloud of a hydrogen atom",
         cmap_name=settings.plot_colormap
     )
+
     if settings.plot_type == 'ScatterPlot':
+        plotter = Plotter(atom, SphDims(100, 100))
+        source = plotter.scatter()
+
         plot = ScatterPlotWindow(plot_spec)
-        plot.draw(plotter.cart_scatter(0).masked())
+        plot.draw(source.val().masked())
     elif settings.plot_type == 'VolumePlot':
+        plotter = Plotter(atom, SphDims(100, 100))
+        source = plotter.volume()
+
         plot = VolumePlotWindow(plot_spec)
-        plot.draw(plotter.cart_grid(0, settings.plot_interpolation))
+        plot.draw(source.val().masked())
     else: raise ValueError(f"Unknown value of settings.plot_type: {settings.plot_type}")
     plot.show()
 
-    interval: Optional[Interval] = None
+    scheduler: Optional[Scheduler] = None
     if settings.interactive:
         dt = 1.0 / settings.fps
-        callback: Callable[[int], Union[CartScatter, CartGrid]] = (lambda i: plotter.cart_scatter(i*settings.speed*dt).masked()) if settings.plot_type == 'ScatterPlot' else (lambda j: plotter.cart_grid(j*settings.speed*dt, settings.plot_interpolation))
-        interval = plot.auto_update(callback, dt)
-        interval.start()
+        callback: Callable[[int], Union[Scatter, Volume]] = (lambda i: source.val(i * settings.speed * dt).masked()) if settings.plot_type == 'ScatterPlot' else (lambda j: source.val(j * settings.speed * dt).masked())
+        scheduler = plot.auto_update(callback, dt)
+        scheduler.start()
 
-    return plot, interval
+    return plot, scheduler
 
 if __name__ == "__main__":
     res = main()

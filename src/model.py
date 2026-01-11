@@ -1,6 +1,6 @@
 # python internals
 from __future__ import annotations
-from typing import Tuple, Union
+from typing import Tuple, Union, Callable
 # internal packages
 from .ntypes import *
 # external packages
@@ -8,7 +8,8 @@ import numpy as np
 from scipy.special import genlaguerre as laguerre
 from scipy.special import lpmv as legendre
 from scipy.special import factorial as fact
-from scipy.interpolate import griddata
+from scipy.ndimage import gaussian_filter
+from scipy.spatial import cKDTree
 
 class StateSpec:
     def __init__(self, n: int, l: int, m: int) -> None:
@@ -35,23 +36,29 @@ class State:
     @property
     def spec(self) -> StateSpec:
         return self.__spec
-    def wave_func(self, p: SphCoords) -> WaveFunction:
+    def wave_func(self, p: SphPointsGrid) -> WaveFunction:
         return WaveFunction(self, p)
-    def energy(self) -> farray_t:
-        mu = 1.0; alpha = 0.01; c = 299792458.0
-        return -mu * c ** 2 * (-1 + np.sqrt(1 + (2 * alpha ** 2) / (self.spec.n - np.abs(self.spec.l + 0.5) - 0.5 + np.sqrt((np.abs(self.spec.l + 0.5) + 0.5) ** 2 - alpha ** 2))))
+    def energy_func(self) -> EnergyFunction:
+        return EnergyFunction(self)
 
 class WaveFunction:
-    def __init__(self, state: State, p: SphCoords) -> None:
+    def __init__(self, state: State, p: SphPointsGrid) -> None:
         scale = 1.0
-        px = np.asarray(legendre(abs(state.spec.m), state.spec.l, np.cos(p.theta)), dtype=npcomplex_t)
+        px = np.asarray(legendre(abs(state.spec.m), state.spec.l, np.cos(p.theta)), dtype=NPComplexT)
         angle = (-1) ** abs(state.spec.m) * np.sqrt(((2*state.spec.l+1) * fact(state.spec.l - abs(state.spec.m))) / (4 * np.pi*fact(state.spec.l + abs(state.spec.m)))) * px * np.exp(1j*abs(state.spec.m)*p.phi)
-        la = np.asarray(laguerre(state.spec.n-state.spec.l-1, 2*state.spec.l+1)(2*p.r/(state.spec.n * scale)),dtype=npfloat_t)
+        la = np.asarray(laguerre(state.spec.n-state.spec.l-1, 2*state.spec.l+1)(2*p.r/(state.spec.n * scale)), dtype=NPFloatT)
         radius = p.r ** state.spec.l * (2/(state.spec.n*scale)) ** (state.spec.l+1) * la * np.exp(-p.r / (state.spec.n*scale))
-        self.__init_val: carray_t = radius * angle
-        self.__state = state
-    def val(self, t: float = 0.0) -> carray_t:
-        return self.__init_val*np.exp(-1j*self.__state.energy()*t)
+        self.__init_val: NPCArrayT = radius * angle
+        self.__energy_func = state.energy_func()
+    def val(self, t: float = 0.0) -> NPCArrayT:
+        return self.__init_val*np.exp(-1j*self.__energy_func.val()*t)
+
+class EnergyFunction:
+    def __init__(self, state: State) -> None:
+        mu = 1.0; alpha = 0.01; c = 299792458.0
+        self.__init_val = -mu * c ** 2 * (-1 + np.sqrt(1 + (2 * alpha ** 2) / (state.spec.n - np.abs(state.spec.l + 0.5) - 0.5 + np.sqrt((np.abs(state.spec.l + 0.5) + 0.5) ** 2 - alpha ** 2))))
+    def val(self) -> NPFArrayT:
+        return self.__init_val
 
 class Atom:
     def __init__(self, *args: State) -> None:
@@ -59,17 +66,17 @@ class Atom:
     @property
     def specs(self) -> Tuple[StateSpec, ...]:
         return tuple(state.spec for state in self.__states)
-    def prob_func(self, p: SphCoords) ->  ProbFunction:
+    def prob_func(self, p: SphPointsGrid) ->  ProbFunction:
         return ProbFunction(self.__states, p)
 
 class ProbFunction:
-    def __init__(self, states: Tuple[State, ...], p: SphCoords) -> None:
-        self.__wave_functions = tuple(state.wave_func(p) for state in states)
-    def val(self, t: float = 0.0) -> farray_t:
-        psi = np.sum(np.asarray(tuple(wave_fun.val(t) for wave_fun in self.__wave_functions), dtype=npcomplex_t), axis=0)
+    def __init__(self, states: Tuple[State, ...], p: SphPointsGrid) -> None:
+        self.__wave_funcs = tuple(state.wave_func(p) for state in states)
+    def val(self, t: float = 0.0) -> NPFArrayT:
+        psi = np.sum(np.asarray(tuple(wave_fun.val(t) for wave_fun in self.__wave_funcs), dtype=NPComplexT), axis=0)
         return np.abs(psi) ** 2
 
-class AtomPlotter:
+class Plotter:
     def __init__(self, atom: Atom, dims: Union[SphDims, CartDims]) -> None:
         self.__dims = dims
 
@@ -77,35 +84,54 @@ class AtomPlotter:
         r = np.linspace(0, rmax, self.__sph_dims.r_dim)
         theta = np.linspace(0, np.pi, self.__sph_dims.angle_dim)
         phi = np.linspace(0, 2 * np.pi, self.__sph_dims.angle_dim)
-        self.__coords: SphCoords = SphCoords(*(np.meshgrid(r, theta, phi, indexing='ij')),)
-        
-        self.__prob_func: ProbFunction = atom.prob_func(self.__coords)
+        self.__sph_grid: SphPointsGrid = SphPointsGrid(*(np.meshgrid(r, theta, phi, indexing='ij')), )
+        self.__cart_grid = CartPointsGrid(
+            self.__sph_grid.r * np.sin(self.__sph_grid.theta) * np.cos(self.__sph_grid.phi),
+            self.__sph_grid.r * np.sin(self.__sph_grid.theta) * np.sin(self.__sph_grid.phi),
+            self.__sph_grid.r * np.cos(self.__sph_grid.theta)
+        )
+        self.__val_func: ProbFunction = atom.prob_func(self.__sph_grid)
     @property
     def __sph_dims(self) -> SphDims:
         return self.__dims if type(self.__dims) is SphDims else self.__dims.to_sph()
     @property
     def __cart_dims(self) -> CartDims:
         return self.__dims if type(self.__dims) is CartDims else self.__dims.to_cart()
-    def sph_scatter(self, t: float = 0) -> SphScatter:
-        return SphScatter(*self.__coords, self.__prob_func.val(t))
-    def cart_scatter(self, t: float = 0) -> CartScatter:
-        sc = self.sph_scatter(t)
-        return CartScatter(sc.r * np.sin(sc.theta) * np.cos(sc.phi), sc.r * np.sin(sc.theta) * np.sin(sc.phi), sc.r * np.cos(sc.theta), sc.prob)
-    def cart_grid(self, t: float = 0, method: interpolation_t = 'nearest') -> CartGrid:
-        sc = self.cart_scatter(t).masked()
+    def scatter(self) -> ScatterFunction:
+        return ScatterFunction(self.__cart_grid, self.__val_func.val)
+    def volume(self) -> VolumeFunction:
+        return VolumeFunction(self.__cart_grid, self.__val_func.val)
 
-        xi = np.linspace(np.min(sc.x), np.max(sc.x), self.__cart_dims.x_dim)
-        yi = np.linspace(np.min(sc.y), np.max(sc.y), self.__cart_dims.y_dim)
-        zi = np.linspace(np.min(sc.z), np.max(sc.z), self.__cart_dims.z_dim)
+class ScatterFunction:
+    def __init__(self, grid: CartPointsGrid, val_func: Callable[[float], NPFArrayT]) -> None:
+        self.__grid = grid
+        self.__val_func = val_func
+    def val(self, t: float = 0.0) -> Scatter:
+        return Scatter(self.__grid.ravel(), self.__val_func(t).ravel())
 
-        grid_values = griddata(
-            np.column_stack((sc.x, sc.y, sc.z)),
-            sc.prob,
-            np.meshgrid(xi, yi, zi, indexing='ij'),
-            method=method,
-            fill_value=0.0
-        )
+class VolumeFunction:
+    def __init__(self, grid: CartPointsGrid, val_func: Callable[[float], NPFArrayT],) -> None:
+        self.__dims = CartDims(*grid.x.shape)
+        self.__val_func = val_func
 
-        return CartGrid(grid_values.reshape((len(xi), len(yi), len(zi))))
+        xi = np.linspace(np.min(grid.x), np.max(grid.x), self.__dims.x_dim)
+        yi = np.linspace(np.min(grid.y), np.max(grid.y), self.__dims.y_dim)
+        zi = np.linspace(np.min(grid.z), np.max(grid.z), self.__dims.z_dim)
 
-__all__ = ['StateSpec', 'State', 'WaveFunction', 'ProbFunction', 'Atom', 'AtomPlotter']
+        query_points = np.stack(np.meshgrid(xi, yi, zi, indexing="ij"), axis=-1).reshape(-1, 3)
+
+        points = np.column_stack(grid.ravel())
+        tree = cKDTree(points)
+
+        dist, idx = tree.query(query_points, k=8, workers=-1)
+
+        w = 1.0 / (dist + 1e-6)
+        w /= w.sum(axis=1, keepdims=True)
+
+        self.__idx = idx
+        self.__w = w
+    def val(self, t: float = 0.0) -> Volume:
+        values = np.sum(self.__val_func(t).ravel()[self.__idx] * self.__w, axis=1).reshape(self.__dims)
+        return Volume(gaussian_filter(values, sigma=0.6))
+
+__all__ = ['StateSpec', 'State', 'WaveFunction', 'ProbFunction', 'Atom', 'Plotter', 'ScatterFunction', 'VolumeFunction']
