@@ -9,6 +9,7 @@ from .scheduler import Scheduler
 from .worker import Worker
 from .view import WindowView
 # external packages
+from PyQt6.QtGui import QColor, QPalette
 import numpy as np
 import pyqtgraph as pg
 import pyqtgraph.opengl as gl
@@ -17,6 +18,7 @@ import pyqtgraph.opengl as gl
 class PlotWindowSpec:
     title: str = ""
     bg_color: Tuple[int, int, int] = (0, 0, 0)
+    text_color: Tuple[int, int, int] = (255, 255, 255)
     cmap_name: ColormapT = 'plasma'
 
 class PlotWindow:
@@ -27,6 +29,10 @@ class PlotWindow:
         self._view.setCameraPosition(distance=10.0, elevation=20.0, azimuth=45.0)
 
         self._cmap = pg.colormap.get(spec.cmap_name)
+
+        palette = self._view.hud.palette()
+        palette.setColor(QPalette.ColorRole.WindowText, QColor(*spec.text_color))
+        self._view.hud.setPalette(palette)
     def draw(self, val: Union[Scatter, Volume]) -> None: pass
     def update(self, val: Union[Scatter, Volume]) -> None: pass
     def auto_update(self, function: Callable[[int], Union[Scatter, Volume]], dt: float) -> Scheduler:
@@ -38,6 +44,9 @@ class PlotWindow:
         return self._view.scheduler
     def show(self) -> None:
         self._view.show()
+    def set_hud(self, text: str) -> None:
+        self._view.hud.setText(text)
+        self._view.hud.show()
     def center(self) -> None: pass
     def snapshot(self) -> NPUArrayT:
         img = self._view.grabFramebuffer()
@@ -64,7 +73,6 @@ class ScatterPlotWindow(PlotWindow):
         rgba = self._cmap.map(v_norm ** gamma, mode='float')
         rgba[:, 3] = 1.0
         return np.ascontiguousarray(rgba)
-    @debug_time
     def draw(self, sc: Scatter) -> None:
         if self.__scatter is not None:
             self._view.removeItem(self.__scatter)
@@ -72,7 +80,6 @@ class ScatterPlotWindow(PlotWindow):
         self.__scatter = gl.GLScatterPlotItem(pos=np.column_stack(sc.points), color=self.__color(sc), size=2)
         self.__scatter.setGLOptions('translucent')
         self._view.addItem(self.__scatter)
-    @debug_time
     def update(self, sc: Scatter) -> None:
         if self.__scatter is None:
             raise RuntimeError("Scatter plot has not been drawn yet.")
@@ -94,7 +101,6 @@ class VolumePlotWindow(PlotWindow):
         rgba = self._cmap.map(v_norm, mode='float').reshape((*v_norm.shape, 4))
         rgba[..., 3] = v_norm
         return np.ascontiguousarray((rgba * 255).astype(NPUintT))
-    @debug_time
     def draw(self, vl: Volume) -> None:
         if self.__volume is not None:
             self._view.removeItem(self.__volume)
@@ -102,7 +108,6 @@ class VolumePlotWindow(PlotWindow):
 
         self.center()
         self._view.addItem(self.__volume)
-    @debug_time
     def update(self, vl: Volume) -> None:
         if self.__volume is None:
             raise RuntimeError("Volume plot has not been drawn yet")

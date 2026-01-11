@@ -16,7 +16,7 @@ class Settings:
     interactive: bool = True
     fps: int = 20
     speed: float = 1
-    plot_type: Literal['ScatterPlot', 'VolumePlot'] = 'VolumePlot'
+    plot_type: Literal['ScatterPlot', 'VolumePlot'] = 'ScatterPlot'
     plot_colormap: ColormapT = 'plasma'
 
 app = QApplication(sys.argv)
@@ -31,25 +31,31 @@ def main() -> Tuple[Union[ScatterPlotWindow, VolumePlotWindow], Optional[Schedul
         cmap_name=settings.plot_colormap
     )
 
+    plotter = Plotter(atom, SphDims(100, 100))
     if settings.plot_type == 'ScatterPlot':
-        plotter = Plotter(atom, SphDims(100, 100))
         source = plotter.scatter()
-
         plot = ScatterPlotWindow(plot_spec)
-        plot.draw(source.val().masked())
     elif settings.plot_type == 'VolumePlot':
-        plotter = Plotter(atom, SphDims(100, 100))
         source = plotter.volume()
-
         plot = VolumePlotWindow(plot_spec)
-        plot.draw(source.val().masked())
     else: raise ValueError(f"Unknown value of settings.plot_type: {settings.plot_type}")
+    plot.draw(source.val().masked())
     plot.show()
 
     scheduler: Optional[Scheduler] = None
     if settings.interactive:
         dt = 1.0 / settings.fps
-        callback: Callable[[int], Union[Scatter, Volume]] = (lambda i: source.val(i * settings.speed * dt).masked()) if settings.plot_type == 'ScatterPlot' else (lambda j: source.val(j * settings.speed * dt).masked())
+        fts = []
+        def callback(i: int) -> Union[Scatter, Volume]:
+            ft = scheduler.frame_time() if scheduler is not None else 0.0
+            if ft > 0:
+                fts.append(ft)
+                if len(fts) > settings.fps: fts.pop(0)
+            fps = 1.0 / (sum(fts) / len(fts)) if len(fts) > 0 else 0.0
+            plot.set_hud(f"fps:      {fps:.3g}\nspec:\n" + "\n".join(f"     ({s.n}, {s.l}, {s.m})" for s in atom.specs))
+
+            return source.val(i * settings.speed * dt).masked()
+
         scheduler = plot.auto_update(callback, dt)
         scheduler.start()
 

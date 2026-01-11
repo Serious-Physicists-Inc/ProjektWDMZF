@@ -12,8 +12,12 @@ class Scheduler:
 
         self.__action = action
         self.__delay = delay
+
         self.__busy = False
         self.__blocked_until: float = 0
+
+        self.__last_tick: float = 0
+        self.__frame_time: float = 0
 
         self.__timer = QTimer(parent)
         self.__timer.timeout.connect(self.__tick)
@@ -24,6 +28,10 @@ class Scheduler:
     def __tick(self) -> None:
         if self.__busy or time.monotonic() < self.__blocked_until: return
 
+        curr_time = time.monotonic()
+        self.__frame_time = curr_time - self.__last_tick if self.__last_tick > 0 else 0
+        self.__last_tick = curr_time
+
         self.__busy = True
         try:
             self.__action()
@@ -31,6 +39,8 @@ class Scheduler:
             print("Error during Scheduler tick:", e)
         finally:
             self.__busy = False
+    def frame_time(self) -> float:
+        return self.__frame_time
     def start(self) -> None:
         self.__timer.start(int(self.__delay * 1000))
     def stop(self) -> None:
