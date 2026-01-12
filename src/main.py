@@ -1,6 +1,6 @@
 # python internals
 from __future__ import annotations
-from typing import Tuple, Union, Callable, Literal, Optional
+from typing import Tuple, Union, Literal, Optional
 from dataclasses import dataclass
 import sys
 # internal packages
@@ -23,7 +23,7 @@ app = QApplication(sys.argv)
 settings: Settings = Settings()
 
 def main() -> Tuple[Union[ScatterPlotWindow, VolumePlotWindow], Optional[Scheduler]]:
-    states = (State(StateSpec(1, 0, 0)),State(StateSpec(2, 1, 0)))
+    states = (State(StateSpec(2, 0, 0)),State(StateSpec(2, 1, 0)))
     atom = Atom(*states)
 
     plot_spec: PlotWindowSpec = PlotWindowSpec(
@@ -52,7 +52,8 @@ def main() -> Tuple[Union[ScatterPlotWindow, VolumePlotWindow], Optional[Schedul
                 fts.append(ft)
                 if len(fts) > settings.fps: fts.pop(0)
             fps = 1.0 / (sum(fts) / len(fts)) if len(fts) > 0 else 0.0
-            plot.set_hud(f"fps:      {fps:.3g}\nspec:\n" + "\n".join(f"     ({s.n}, {s.l}, {s.m})" for s in atom.specs))
+            plot.set_hud(f"fps:      {fps:.3g}\nspec:\n"
+                         + "\n".join(f"     ({s.n}, {s.l}, {s.m})" for s in atom.specs))
 
             return source.val(i * settings.speed * dt).masked()
 

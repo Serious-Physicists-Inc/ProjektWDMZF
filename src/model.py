@@ -12,17 +12,23 @@ from scipy.ndimage import gaussian_filter
 from scipy.spatial import cKDTree
 
 class StateSpec:
-    def __init__(self, n: int, l: int, m: int) -> None:
+    def __new__(cls, n: int, l: int, m: int):
         if n < 1:
             raise ValueError("The value of the principal quantum number must be greater than 0.")
         if l >= n:
-            raise ValueError(
-                "The value of the secondary quantum number must be less than the value of the principal quantum number.")
+            raise ValueError("The value of the secondary quantum number must be less than the value of the principal quantum number.")
         if m < -l or m > l:
             raise ValueError("The magnetic number modulus cannot be greater than the secondary quantum number modulus.")
+
+        return super().__new__(cls)
+    def __init__(self, n: int, l: int, m: int) -> None:
         self.__n = n
         self.__l = l
         self.__m = m
+    def __eq__(self, other):
+        if not isinstance(other, StateSpec):
+            return NotImplemented
+        return self.__n == other.n and self.__l == other.l and self.__m == other.m
     @property
     def n(self) -> int: return self.__n
     @property
@@ -33,6 +39,10 @@ class StateSpec:
 class State:
     def __init__(self, spec: StateSpec) -> None:
         self.__spec = spec
+    def __eq__(self, other):
+        if not isinstance(other, State):
+            return NotImplemented
+        return self.__spec == other.spec
     @property
     def spec(self) -> StateSpec:
         return self.__spec
@@ -61,8 +71,16 @@ class EnergyFunction:
         return self.__init_val
 
 class Atom:
+    def __new__(cls, *args: State) -> Atom:
+        if any(args[i] == args[j] for i in range(len(args)) for j in range(i + 1, len(args))):
+            raise ValueError("Two or more states passed as arguments are the same")
+        return super().__new__(cls)
     def __init__(self, *args: State) -> None:
         self.__states = args
+    def __eq__(self, other):
+        if not isinstance(other, Atom):
+            return NotImplemented
+        return self.specs == other.specs
     @property
     def specs(self) -> Tuple[StateSpec, ...]:
         return tuple(state.spec for state in self.__states)
