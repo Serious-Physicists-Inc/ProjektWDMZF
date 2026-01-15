@@ -1,66 +1,64 @@
 from __future__ import annotations
-from typing import Tuple, Union, Literal
+from typing import Tuple, Union, Literal, Callable, Optional
 from dataclasses import dataclass
 import sys
 
-from .ntypes import interpolation_t, ColormapT, SphDims
-from .model import StateSpec, State, Atom, AtomPlotter
+from .ntypes import ColormapT, SphDims, Scatter, Volume
+from .model import StateSpec, State, Atom, Plotter
 from .plot import *
-from src.scheduler import *
-from .interval import *
+from .scheduler import *
 
 from PyQt6.QtWidgets import QApplication, QWidget, QVBoxLayout, QTabWidget, QCheckBox, QPushButton, QFormLayout, QLineEdit, QLabel, QMessageBox, QSlider, QHBoxLayout, QScrollArea, QFrame, QSizePolicy
 from PyQt6.QtCore import Qt, QPropertyAnimation, QEasingCurve, pyqtProperty, QRectF
 from PyQt6.QtGui import QPainter, QColor, QPen, QFont
 
-from PyQt6.QtWidgets import QApplication, QWidget, QVBoxLayout, QTabWidget, QCheckBox, QPushButton, QFormLayout, QLineEdit, QLabel, QMessageBox
-
-
 @dataclass
 class Settings:
     interactive: bool = True
-    fps: int = 30
+    fps: int = 20
     speed: float = 1
-    speed: float = 60.0
     plot_type: Literal['ScatterPlot', 'VolumePlot'] = 'ScatterPlot'
     plot_colormap: ColormapT = 'plasma'
-    plot_interpolation: interpolation_t = 'nearest'
 
-def launch_custom_plot(atom: Atom, settings: Settings) -> Tuple[Union[ScatterPlotWindow, VolumePlotWindow], Optional[Interval]]:
+settings: Settings = Settings()
 
-    plotter = AtomPlotter(atom, SphDims(100, 100))
-
+def launch_custom_plot(atom: Atom, settings: Settings) -> Tuple[Union[ScatterPlotWindow, VolumePlotWindow], Optional[Scheduler]]:
     plot_spec: PlotWindowSpec = PlotWindowSpec(
         title="Electron cloud of a hydrogen atom",
         cmap_name=settings.plot_colormap
     )
 
-    plot = None
-
+    plotter = Plotter(atom, SphDims(100, 100))
     if settings.plot_type == 'ScatterPlot':
+        source = plotter.scatter()
         plot = ScatterPlotWindow(plot_spec)
-        plot.draw(plotter.cart_scatter(0).masked())
     elif settings.plot_type == 'VolumePlot':
+        source = plotter.volume()
         plot = VolumePlotWindow(plot_spec)
-        plot.draw(plotter.cart_grid(0, settings.plot_interpolation))
     else:
         raise ValueError(f"Unknown value of settings.plot_type: {settings.plot_type}")
-
+    plot.draw(source.val().masked())
     plot.show()
 
-    interval: Optional[Interval] = None
+    scheduler: Optional[Scheduler] = None
     if settings.interactive:
         dt = 1.0 / settings.fps
+        fts = []
 
-        if settings.plot_type == 'ScatterPlot':
-            callback = lambda i: plotter.cart_scatter(i * settings.speed * dt).masked()
-        else:
-            callback = lambda j: plotter.cart_grid(j * settings.speed * dt, settings.plot_interpolation)
+        def callback(i: int) -> Union[Scatter, Volume]:
+            ft = scheduler.frame_time() if scheduler is not None else 0.0
+            if ft > 0:
+                fts.append(ft)
+                if len(fts) > settings.fps: fts.pop(0)
+            fps = 1.0 / (sum(fts) / len(fts)) if len(fts) > 0 else 0.0
+            plot.set_hud(f"fps:      {fps:.3g}\nspec:\n" + "\n".join(f"     ({s.n}, {s.l}, {s.m})" for s in atom.specs))
 
-        interval = plot.auto_update(callback, dt)
-        interval.start()
+            return source.val(i * settings.speed * dt).masked()
 
-    return plot, interval
+        scheduler = plot.auto_update(callback, dt)
+        scheduler.start()
+
+    return plot, scheduler
 
 class StateRow(QWidget):
     def __init__(self, parent_layout: QVBoxLayout, index: int, remove_callback: Callable):
@@ -166,7 +164,7 @@ class Window(QWidget):
         self.resize(450, 400)
 
         self.current_plot = None
-        self.current_interval = None
+        self.current_Scheduler = None
         self.superposition_rows = []
 
         main_layout = QVBoxLayout()
@@ -287,12 +285,12 @@ class Window(QWidget):
             settings.plot_type = 'VolumePlot' if self.chk_volume.isChecked() else 'ScatterPlot'
             settings.interactive = True
 
-            if self.current_interval is not None:
+            if self.current_Scheduler is not None:
                 try:
-                    self.current_interval.stop()
+                    self.current_Scheduler.stop()
                 except RuntimeError:
                     pass
-                self.current_interval = None
+                self.current_Scheduler = None
 
             if self.current_plot is not None:
                 try:
@@ -306,7 +304,7 @@ class Window(QWidget):
 
                 QApplication.processEvents()
 
-            self.current_plot, self.current_interval = launch_custom_plot(atom, settings)
+            self.current_plot, self.current_Scheduler = launch_custom_plot(atom, settings)
 
         except ValueError as e:
             QMessageBox.warning(self, "Input Error", f"Invalid input values: {e}")
