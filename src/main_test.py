@@ -171,8 +171,8 @@ class Window(QWidget):
         self.setLayout(main_layout)
 
         self.tabs = QTabWidget()
-        self.tabs.addTab(self.Dstate(), "Discrete state")
-        self.tabs.addTab(self.Superposition(), "Superposition")
+        self.tabs.addTab(self.Superposition(), "Kreator orbitali")
+        self.tabs.addTab(self.Dstate(), "Ustawienia")
         main_layout.addWidget(self.tabs)
 
         switch_layout = QHBoxLayout()
@@ -201,20 +201,9 @@ class Window(QWidget):
     def Dstate(self):
         Tab1 = QWidget()
         layout = QFormLayout()
-
-        self.input_n = QLineEdit()
-        self.input_l = QLineEdit()
-        self.input_m = QLineEdit()
-
-        self.input_n.setText("1")
-        self.input_l.setText("0")
-        self.input_m.setText("0")
-
-        layout.addRow(QLabel("n"), self.input_n)
-        layout.addRow(QLabel("l"), self.input_l)
-        layout.addRow(QLabel("m"), self.input_m)
+        self.window_settings = QPushButton("Zrzut ekranu")
+        layout.addWidget(self.window_settings)
         Tab1.setLayout(layout)
-
         return Tab1
 
     def Superposition(self):
@@ -263,13 +252,6 @@ class Window(QWidget):
             atom = None
 
             if current_tab_index == 0:
-                n = int(self.input_n.text())
-                l = int(self.input_l.text())
-                m = int(self.input_m.text())
-
-                atom = Atom(State(StateSpec(n, l, m)))
-
-            elif current_tab_index == 1:
                 states_list = []
 
                 if not self.superposition_rows:
