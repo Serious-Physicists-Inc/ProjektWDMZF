@@ -1,0 +1,83 @@
+# python internals
+from __future__ import annotations
+from typing import Tuple, Union, Literal, Optional
+from dataclasses import dataclass
+import sys
+# internal packages
+from .ntypes import ColormapT, SphDims, Scatter, Volume
+from .model import StateSpec, State, Atom, Plotter
+from .scheduler import Scheduler
+from .plot import *
+# external packages
+from PyQt6.QtWidgets import QApplication
+
+@dataclass
+class Settings:
+    interactive: bool = True
+    fps: int = 30
+    speed: float = 0.5
+    plot_type: Literal['ScatterPlot', 'VolumePlot'] = 'ScatterPlot'
+    plot_colormap: ColormapT = 'plasma'
+
+settings: Settings = Settings()
+
+def main() -> Tuple[Union[ScatterPlotWindow, VolumePlotWindow], Optional[Scheduler]]:
+    states = (State(StateSpec(2, 0, 0)),State(StateSpec(2, 1, 0)))
+    atom = Atom(*states)
+
+    plot_spec: PlotWindowSpec = PlotWindowSpec(
+        title="Electron cloud of a hydrogen atom",
+        cmap_name=settings.plot_colormap
+    )
+
+    plotter = Plotter(atom, SphDims(100, 100))
+    if settings.plot_type == 'ScatterPlot':
+        source = plotter.scatter()
+        plot = ScatterPlotWindow(plot_spec)
+    elif settings.plot_type == 'VolumePlot':
+        source = plotter.volume()
+        plot = VolumePlotWindow(plot_spec)
+    else: raise ValueError(f"Unknown value of settings.plot_type: {settings.plot_type}")
+    plot.draw(source.val().masked())
+    plot.show()
+
+    scheduler: Optional[Scheduler] = None
+    if settings.interactive:
+        def callback(i: int) -> Union[Scatter, Volume]:
+            return source.val(i * settings.speed / settings.fps).masked()
+
+        scheduler = plot.auto_update(callback, settings.fps)
+
+        fps_rec = []
+        en_vals = dict(zip(((s.spec.n, s.spec.l, s.spec.m) for s in states), (s.energy_func().ev_val() for s in states)))
+        def on_step(i: int) -> None:
+            nonlocal scheduler
+            nonlocal fps_rec
+
+            fps = scheduler.fps
+            if fps > 0:
+                fps_rec.append(fps)
+                if len(fps_rec) > settings.fps:
+                    fps_rec.pop(0)
+
+            fps_avg = sum(fps_rec) / len(fps_rec) if fps_rec else 0.0
+
+            nonlocal en_vals
+            plot.set_hud(
+                f"speed:{' ' * 12}{settings.speed:.3g}\n"
+                + f"fps:{' ' * 14}{fps_avg:.3g}\nspec:\n"
+                + "\n".join(
+                    f"{' ' * 5}({s.n}, {s.l}, {s.m}),\n"
+                    f"{' ' * 7}en: {en_vals[(s.n, s.l, s.m)]: .6g} eV"
+                    for s in atom.specs
+                )
+            )
+
+        scheduler.stepOccurred.connect(on_step)
+
+    return plot, scheduler
+
+if __name__ == "__main__":
+    app = QApplication(sys.argv)
+    res = main()
+    sys.exit(app.exec())
