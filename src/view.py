@@ -2,73 +2,221 @@
 from __future__ import annotations
 from typing import Optional
 # internal packages
-from .scheduler import Scheduler
+from .ntypes import *
 # external packages
-from PyQt6.QtCore import QEvent, Qt
-from PyQt6.QtGui import QFont
-from PyQt6.QtWidgets import QLabel, QVBoxLayout
+from PyQt6.QtCore import Qt, QObject, QEvent, pyqtSignal
+from PyQt6.QtGui import QFont, QImage, QPixmap, QCloseEvent, QHideEvent, QShowEvent
+from PyQt6.QtWidgets import QWidget, QLabel, QHBoxLayout, QGridLayout, QVBoxLayout, QSizePolicy
+import numpy as np
+import pyqtgraph as pg
 import pyqtgraph.opengl as gl
 
-class WindowView(gl.GLViewWidget):
-    def __init__(self, parent: Optional[object] = None) -> None:
+class ColorBar(QWidget):
+    def __init__(self, parent: Optional[QWidget] = None) -> None:
         super().__init__(parent)
-        self.__scheduler: Optional[Scheduler] = None
 
-        self.setMinimumSize(400, 300)
+        self.__cmap: Optional[ColormapT] = None
+        self.__scale: NPFloatT = 1.0
+        self.__nticks: NPIntT = 5
 
-        self.__hud = QLabel(self)
+        self.__bar = QLabel(self)
+        self.__bar.setFixedWidth(10)
+        self.__bar.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Expanding)
+        self.__bar.setScaledContents(True)
+
+        self.__labels_layout = QGridLayout()
+        self.__labels_layout.setContentsMargins(6, 0, 0, 0)
+        self.__labels_layout.setHorizontalSpacing(0)
+        self.__labels_layout.setVerticalSpacing(0)
+
+        self.__labels: list[QLabel] = []
+
+        main_layout = QHBoxLayout(self)
+        main_layout.setContentsMargins(0, 0, 0, 0)
+        main_layout.setSpacing(0)
+
+        main_layout.addWidget(self.__bar)
+        main_layout.addLayout(self.__labels_layout)
+
+        self.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Expanding)
+        self.__set_labels()
+        self.hide()
+    @property
+    def scale(self) -> NPFloatT:
+        return self.__scale
+    def set_scale(self, value: NPFloatT) -> None:
+        if value <= 0.0:
+            raise ValueError("scale must be positive")
+
+        self.__scale = value
+        self.__set_labels()
+    @property
+    def colormap(self) -> Optional[ColormapT]:
+        return self.__cmap
+    @colormap.setter
+    def colormap(self, cmap: ColormapT) -> None:
+        self.__cmap = cmap
+    def __normalize(self, val: NPFArrayT) -> NPFArrayT:
+        v_log = np.log1p(val)
+        vmax_log = np.max(v_log)
+        v_norm = v_log / vmax_log
+
+        gamma = 0.4
+        return v_norm ** gamma
+    def __set_labels(self) -> None:
+        for lbl in self.__labels:
+            lbl.deleteLater()
+        self.__labels.clear()
+
+        while self.__labels_layout.count():
+            self.__labels_layout.takeAt(0)
+
+        val = np.linspace(0.0, self.__scale, 512)
+        vnorm = self.__normalize(val)
+
+        target = np.linspace(1.0, 0.0, self.__nticks + 1)[:-1]
+
+        idx = np.asarray([np.argmin(np.abs(vnorm - t)) for t in target], dtype=NPIntT)
+        values = val[idx]
+
+        for r in range(self.__nticks * 2 - 1):
+            self.__labels_layout.setRowStretch(r, 1)
+
+        for i, v in enumerate(values):
+            lbl = QLabel(f"{v:.3f}", self)
+            lbl.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop)
+
+            self.__labels_layout.addWidget(lbl, i * 2, 0)
+            self.__labels.append(lbl)
+    def set_val(self, val: NPFArrayT) -> None:
+        if self.__cmap is None: return
+
+        vmax = np.max(val)
+        resolution = 256
+        used = int(np.clip(vmax / self.__scale, 0.0, 1.0) * resolution)
+
+        v = np.linspace(vmax, 0.0, used)
+        vnorm = self.__normalize(v)
+
+        rgba = np.zeros((resolution, 4), dtype=NPFloatT)
+
+        rgba[-used:] = self.__cmap.map(vnorm, mode='float')
+        rgba[:-used, 3] = 0.0
+
+        img = (rgba * 255).astype(np.uint8).reshape((resolution, 1, 4))
+        qimg = QImage(img.data,img.shape[1], img.shape[0], img.strides[0], QImage.Format.Format_RGBA8888)
+        self.__bar.setPixmap(QPixmap.fromImage(qimg))
+
+
+class Hud(QLabel):
+    def __init__(self, parent: Optional[QWidget] = None) -> None:
+        super().__init__(parent)
+
         font = QFont("Monospace", 11)
         font.setStyleHint(QFont.StyleHint.Monospace)
-        self.__hud.setFont(font)
-        self.__hud.setAutoFillBackground(False)
-        self.__hud.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
-        self.__hud.hide()
+        self.setFont(font)
 
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(0, 0, 10, 10)
-        layout.addStretch()
-        layout.addWidget(self.__hud, alignment=Qt.AlignmentFlag.AlignRight)
+        self.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
+        self.hide()
+
+class WindowView(QWidget):
+    mousePressOccurred = pyqtSignal()
+    mouseReleaseOccurred = pyqtSignal()
+    wheelScrollOccurred = pyqtSignal()
+    resizeOccurred = pyqtSignal()
+    windowMinimizeOccurred = pyqtSignal()
+    windowRestoreOccurred = pyqtSignal()
+    windowCloseOccurred = pyqtSignal()
+    def __init__(self, parent: Optional[QWidget] = None) -> None:
+        super().__init__(parent)
+        self.setMinimumSize(400, 300)
+
+        self.__hud: Optional[Hud] = None
+        self.__colorbar: Optional[ColorBar] = None
+
+        self.__plot = gl.GLViewWidget(self)
+        self.__plot.installEventFilter(self)
+
+        self.__main_layout = QHBoxLayout(self)
+        self.__main_layout.setContentsMargins(0, 0, 0, 0)
+        self.__main_layout.setSpacing(0)
+        self.__main_layout.addWidget(self.__plot)
+
+        self.__overlay = QWidget(self.__plot)
+        self.__overlay.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
+        self.__overlay.setStyleSheet("background: transparent;")
+
+        self.__overlay_layout = QHBoxLayout(self.__overlay)
+        self.__overlay_layout.setContentsMargins(0, 0, 0, 0)
+        self.__overlay_layout.setSpacing(0)
+
+        self.__colorbar_layout = QVBoxLayout()
+        self.__colorbar_layout.setContentsMargins(0, 50, 0, 50)
+        self.__colorbar_layout.setSpacing(0)
+
+        self.__overlay_layout.addLayout(self.__colorbar_layout)
+        self.__overlay_layout.addStretch(1)
+
+        self.__hud_layout = QVBoxLayout()
+        self.__hud_layout.setContentsMargins(0, 0, 10, 10)
+        self.__hud_layout.setSpacing(0)
+        self.__hud_layout.addStretch(1)
+
+        self.__overlay_layout.addLayout(self.__hud_layout)
+
+        self.__plot.setLayout(QHBoxLayout())
+        self.__plot.layout().setContentsMargins(0, 0, 0, 0)
+        self.__plot.layout().addWidget(self.__overlay)
     @property
-    def hud(self) -> QLabel:
+    def plot(self) -> gl.GLViewWidget:
+        return self.__plot
+    @property
+    def hud(self) -> Optional[Hud]:
         return self.__hud
-    @property
-    def scheduler(self) -> Optional[Scheduler]:
-        return self.__scheduler
-    @scheduler.setter
-    def scheduler(self, scheduler: Optional[Scheduler]) -> None:
-        if self.__scheduler is not None:
-            self.__scheduler.stop()
-        self.__scheduler = scheduler
-    def mouseMoveEvent(self, ev) -> None:
-        if ev.buttons() and self.__scheduler is not None:
-            self.__scheduler.block(0.05)
-        super().mouseMoveEvent(ev)
-    def wheelEvent(self, ev) -> None:
-        if self.__scheduler is not None:
-            self.__scheduler.block(0.1)
-        super().wheelEvent(ev)
-    def changeEvent(self, ev) -> None:
-        if ev.type() == QEvent.Type.WindowStateChange:
-            if self.__scheduler is not None:
-                old = ev.oldState()
-                new = self.windowState()
+    @hud.setter
+    def hud(self, hud: Optional[Hud]) -> None:
+        if self.__hud is not None:
+            self.__hud_layout.removeWidget(self.__hud)
+            self.__hud.setParent(None)
 
-                if new & Qt.WindowState.WindowMinimized:
-                    self.__scheduler.block()
-                else:
-                    changed = old ^ new
-                    if ((old & Qt.WindowState.WindowMinimized) or
-                            (changed & (Qt.WindowState.WindowMaximized | Qt.WindowState.WindowFullScreen))):
-                        self.__scheduler.block(0.1)
-        super().changeEvent(ev)
-    def resizeEvent(self, ev) -> None:
-        if self.__scheduler is not None:
-            self.__scheduler.block(0.1)
-        super().resizeEvent(ev)
-    def closeEvent(self, ev) -> None:
-        if self.__scheduler is not None:
-            self.__scheduler.stop()
-            self.__scheduler = None
+        self.__hud = hud
+        if hud is not None:
+            self.__hud_layout.addWidget(hud, alignment=Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignBottom)
+            hud.show()
+    @property
+    def colorbar(self) -> Optional[ColorBar]:
+        return self.__colorbar
+    @colorbar.setter
+    def colorbar(self, colorbar: Optional[ColorBar]) -> None:
+        if self.__colorbar is not None:
+            self.__colorbar_layout.removeWidget(self.__colorbar)
+            self.__colorbar.setParent(None)
+
+        self.__colorbar = colorbar
+        if colorbar is not None:
+            self.__colorbar_layout.addWidget(colorbar)
+            colorbar.show()
+    def eventFilter(self, obj: QObject, ev: QEvent) -> bool:
+        if obj is self.__plot:
+            if ev.type() == QEvent.Type.MouseButtonPress:
+                self.mousePressOccurred.emit()
+            elif ev.type() == QEvent.Type.MouseButtonRelease:
+                self.mouseReleaseOccurred.emit()
+            elif ev.type() == QEvent.Type.Wheel:
+                self.wheelScrollOccurred.emit()
+            elif ev.type() == QEvent.Type.Resize:
+                self.resizeOccurred.emit()
+
+        return super().eventFilter(obj, ev)
+    def hideEvent(self, ev: Optional[QHideEvent]) -> None:
+        self.windowMinimizeOccurred.emit()
+        super().hideEvent(ev)
+
+    def showEvent(self, ev: Optional[QShowEvent]) -> None:
+        self.windowRestoreOccurred.emit()
+        super().showEvent(ev)
+    def closeEvent(self, ev: Optional[QCloseEvent]) -> None:
+        self.windowCloseOccurred.emit()
         super().closeEvent(ev)
 
-__all__ = ["WindowView"]
+__all__ = ['WindowView', 'ColorBar', 'Hud']

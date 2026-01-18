@@ -14,12 +14,11 @@ from PyQt6.QtWidgets import QApplication
 @dataclass
 class Settings:
     interactive: bool = True
-    fps: int = 20
-    speed: float = 1
+    fps: int = 30
+    speed: float = 0.5
     plot_type: Literal['ScatterPlot', 'VolumePlot'] = 'ScatterPlot'
     plot_colormap: ColormapT = 'plasma'
 
-app = QApplication(sys.argv)
 settings: Settings = Settings()
 
 def main() -> Tuple[Union[ScatterPlotWindow, VolumePlotWindow], Optional[Scheduler]]:
@@ -44,25 +43,41 @@ def main() -> Tuple[Union[ScatterPlotWindow, VolumePlotWindow], Optional[Schedul
 
     scheduler: Optional[Scheduler] = None
     if settings.interactive:
-        dt = 1.0 / settings.fps
-        fts = []
         def callback(i: int) -> Union[Scatter, Volume]:
-            ft = scheduler.frame_time() if scheduler is not None else 0.0
-            if ft > 0:
-                fts.append(ft)
-                if len(fts) > settings.fps: fts.pop(0)
-            fps = 1.0 / (sum(fts) / len(fts)) if len(fts) > 0 else 0.0
-            plot.set_hud(f"fps:      {fps:.3g}\nspec:\n"
-                         + "\n".join(f"     ({s.n}, {s.l}, {s.m})" for s in atom.specs))
+            return source.val(i * settings.speed / settings.fps).masked()
 
-            return source.val(i * settings.speed * dt).masked()
+        scheduler = plot.auto_update(callback, settings.fps)
 
-        scheduler = plot.auto_update(callback, dt)
-        scheduler.start()
+        fps_rec = []
+        en_vals = dict(zip(((s.spec.n, s.spec.l, s.spec.m) for s in states), (s.energy_func().ev_val() for s in states)))
+        def on_step(i: int) -> None:
+            nonlocal scheduler
+            nonlocal fps_rec
+
+            fps = scheduler.fps
+            if fps > 0:
+                fps_rec.append(fps)
+                if len(fps_rec) > settings.fps:
+                    fps_rec.pop(0)
+
+            fps_avg = sum(fps_rec) / len(fps_rec) if fps_rec else 0.0
+
+            nonlocal en_vals
+            plot.set_hud(
+                f"speed:{' ' * 12}{settings.speed:.3g}\n"
+                + f"fps:{' ' * 14}{fps_avg:.3g}\nspec:\n"
+                + "\n".join(
+                    f"{' ' * 5}({s.n}, {s.l}, {s.m}),\n"
+                    f"{' ' * 7}en: {en_vals[(s.n, s.l, s.m)]: .6g} eV"
+                    for s in atom.specs
+                )
+            )
+
+        scheduler.stepOccurred.connect(on_step)
 
     return plot, scheduler
 
 if __name__ == "__main__":
+    app = QApplication(sys.argv)
     res = main()
-
-input("Naciśnij Enter, aby zakończyć...")
+    sys.exit(app.exec())

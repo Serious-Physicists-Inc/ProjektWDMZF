@@ -14,11 +14,11 @@ from scipy.spatial import cKDTree
 class StateSpec:
     def __new__(cls, n: int, l: int, m: int):
         if n < 1:
-            raise ValueError("The value of the principal quantum number must be greater than 0.")
+            raise ValueError("The value of the principal quantum number 'n' must be greater than 0.")
         if l >= n:
-            raise ValueError("The value of the secondary quantum number must be less than the value of the principal quantum number.")
+            raise ValueError("The value of the secondary quantum number 'l' must be less than the value of the principal quantum number.")
         if m < -l or m > l:
-            raise ValueError("The magnetic number modulus cannot be greater than the secondary quantum number modulus.")
+            raise ValueError("The magnetic number 'm' modulus cannot be greater than the secondary quantum number modulus.")
 
         return super().__new__(cls)
     def __init__(self, n: int, l: int, m: int) -> None:
@@ -52,23 +52,33 @@ class State:
         return EnergyFunction(self)
 
 class WaveFunction:
+    scale = 1.0
     def __init__(self, state: State, p: SphPointsGrid) -> None:
-        scale = 1.0
         px = np.asarray(legendre(abs(state.spec.m), state.spec.l, np.cos(p.theta)), dtype=NPComplexT)
         angle = (-1) ** abs(state.spec.m) * np.sqrt(((2*state.spec.l+1) * fact(state.spec.l - abs(state.spec.m))) / (4 * np.pi*fact(state.spec.l + abs(state.spec.m)))) * px * np.exp(1j*abs(state.spec.m)*p.phi)
-        la = np.asarray(laguerre(state.spec.n-state.spec.l-1, 2*state.spec.l+1)(2*p.r/(state.spec.n * scale)), dtype=NPFloatT)
-        radius = p.r ** state.spec.l * (2/(state.spec.n*scale)) ** (state.spec.l+1) * la * np.exp(-p.r / (state.spec.n*scale))
+        la = np.asarray(laguerre(state.spec.n-state.spec.l-1, 2*state.spec.l+1)(2*p.r/(state.spec.n * self.scale)), dtype=NPFloatT)
+        radius = p.r ** state.spec.l * (2/(state.spec.n*self.scale)) ** (state.spec.l+1) * la * np.exp(-p.r / (state.spec.n*self.scale))
         self.__init_val: NPCArrayT = radius * angle
         self.__energy_func = state.energy_func()
     def val(self, t: float = 0.0) -> NPCArrayT:
         return self.__init_val*np.exp(-1j*self.__energy_func.val()*t)
 
 class EnergyFunction:
+    # physics constants
+    alpha_phys = 7.2973525693e-3
+    c_phys = 299792458.0
+    mu_phys = 9.1093837015e-31
+    e = 1.602176634e-19
+    # model constants
+    mu = 1.0
+    alpha = 0.01
     def __init__(self, state: State) -> None:
-        mu = 1.0; alpha = 0.01; c = 299792458.0
-        self.__init_val = -mu * c ** 2 * (-1 + np.sqrt(1 + (2 * alpha ** 2) / (state.spec.n - np.abs(state.spec.l + 0.5) - 0.5 + np.sqrt((np.abs(state.spec.l + 0.5) + 0.5) ** 2 - alpha ** 2))))
-    def val(self) -> NPFArrayT:
+        self.__init_val = self.mu * self.c_phys ** 2 * (np.sqrt(1 - self.alpha ** 2 / (state.spec.n - state.spec.l - 1 + np.sqrt((state.spec.l + 1) ** 2 - self.alpha ** 2)) ** 2) - 1)
+        self.__init_ev_val = self.mu_phys * self.c_phys ** 2 * (np.sqrt(1 - self.alpha_phys ** 2 / (state.spec.n - state.spec.l - 1 + np.sqrt((state.spec.l + 1) ** 2 - self.alpha_phys ** 2)) ** 2) - 1) / self.e
+    def val(self) -> NPFloatT:
         return self.__init_val
+    def ev_val(self) -> NPFloatT:
+        return self.__init_ev_val
 
 class Atom:
     def __new__(cls, *args: State) -> Atom:

@@ -1,6 +1,7 @@
 # python internals
 from __future__ import annotations
 from typing import Tuple, NamedTuple, Literal
+from dataclasses import dataclass
 import math
 # external packages
 import numpy as np
@@ -45,16 +46,28 @@ class CartPointsGrid(NamedTuple):
 class SphPoints(NamedTuple): r: NPFArrayT; theta: NPFArrayT; phi: NPFArrayT
 class CartPoints(NamedTuple): x: NPFArrayT; y: NPFArrayT; z: NPFArrayT
 
-class Scatter(NamedTuple):
-    points: CartPoints
-    val: NPFArrayT
+@dataclass(frozen=True, slots=True)
+class Scatter:
+    points: Tuple[np.ndarray, np.ndarray, np.ndarray]
+    val: np.ndarray
+    def __post_init__(self):
+        for p in self.points:
+            p.setflags(write=False)
+        self.val.setflags(write=False)
+    def copy(self) -> Scatter:
+        return Scatter(points=tuple(np.copy(p) for p in self.points), val=np.copy(self.val))
     def masked(self, factor: float = 0.001) -> Scatter:
         cutoff = np.max(self.val) * factor
         mask = self.val > cutoff
         return Scatter(CartPoints(*(arr[mask] for arr in self.points)), self.val[mask])
 
-class Volume(NamedTuple):
-    val: NPFArrayT
+@dataclass(frozen=True, slots=True)
+class Volume:
+    val: np.ndarray
+    def __post_init__(self):
+        self.val.setflags(write=False)
+    def copy(self) -> Volume:
+        return Volume(np.copy(self.val))
     def masked(self, factor: float = 0.001) -> Volume:
         cutoff = np.max(self.val) * factor
         return Volume(np.where(self.val > cutoff, self.val, 0.0))
