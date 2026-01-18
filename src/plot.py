@@ -138,7 +138,7 @@ class ScatterPlotWindow(PlotWindow):
         return np.ascontiguousarray(rgba)
     def draw(self, sc: Scatter) -> None:
         if self.__scatter is not None:
-            self._view.removeItem(self.__scatter)
+            self._view.plot.removeItem(self.__scatter)
 
         super().draw(sc)
         self.__scatter = gl.GLScatterPlotItem(pos=np.column_stack(sc.points), color=self.__color(sc), size=2)
@@ -174,7 +174,7 @@ class VolumePlotWindow(PlotWindow):
         return np.ascontiguousarray((rgba * 255).astype(NPUintT))
     def draw(self, vl: Volume) -> None:
         if self.__volume is not None:
-            self._view.removeItem(self.__volume)
+            self._view.plot.removeItem(self.__volume)
 
         super().draw(vl)
         self.__volume = gl.GLVolumeItem(data=self.__color(vl), smooth=True, sliceDensity=1)

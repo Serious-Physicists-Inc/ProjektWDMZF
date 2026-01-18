@@ -291,6 +291,11 @@ class Window(QWidget):
         self.setWindowTitle("Menu")
         self.resize(500, 550)
 
+        self.plot_cache = {
+            'ScatterPlot': {'window': None, 'scheduler': None},
+            'VolumePlot': {'window': None, 'scheduler': None}
+        }
+
         self.current_plot = None
         self.current_Scheduler = None
         self.superposition_rows = []
@@ -417,30 +422,56 @@ class Window(QWidget):
 
                 atom = Atom(*states_list)
 
+            target_type = 'VolumePlot' if self.chk_volume.isChecked() else 'ScatterPlot'
             settings = Settings()
-            settings.plot_type = 'VolumePlot' if self.chk_volume.isChecked() else 'ScatterPlot'
+            settings.plot_type = target_type
             settings.interactive = True
 
-            if self.current_Scheduler is not None:
+            other_type = 'ScatterPlot' if target_type == 'VolumePlot' else 'VolumePlot'
+            other_cache = self.plot_cache[other_type]
+            if other_cache['window'] is not None:
                 try:
-                    self.current_Scheduler.abort()
+                    other_cache['window']._view.hide()
+                    if other_cache['scheduler']:
+                        other_cache['scheduler'].abort()
                 except RuntimeError:
-                    pass
-                self.current_Scheduler = None
+                    other_cache['window'] = None
+                    other_cache['scheduler'] = None
 
-            if self.current_plot is not None:
+            target_cache = self.plot_cache[target_type]
+
+            window_exists = False
+            if target_cache['window'] is not None:
                 try:
-                    if hasattr(self.current_plot, '_view'):
-                        self.current_plot._view.hide()
+                    _ = target_cache['window']._view.isVisible()
+                    window_exists = True
+                except RuntimeError:
+                    window_exists = False
 
-                    self.current_plot.close()
-                except:
-                    pass
-                self.current_plot = None
+            if not window_exists:
+                plot, scheduler = launch_custom_plot(atom, settings)
+                target_cache['window'] = plot
+                target_cache['scheduler'] = scheduler
+            else:
+                plot = target_cache['window']
+                plot.show()
 
-                QApplication.processEvents()
+                plotter = Plotter(atom, SphDims(100, 100))
+                if target_type == 'ScatterPlot':
+                    source = plotter.scatter()
+                else:
+                    source = plotter.volume()
 
-            self.current_plot, self.current_Scheduler = launch_custom_plot(atom, settings)
+                plot.draw(source.val().masked())
+
+                if settings.interactive:
+                    if target_cache['scheduler']:
+                        target_cache['scheduler'].abort()
+
+                    def callback(i: int) -> Union[Scatter, Volume]:
+                        return source.val(i * settings.speed / settings.fps).masked()
+
+                    target_cache['scheduler'] = plot.auto_update(callback, settings.fps)
 
         except ValueError as e:
             QMessageBox.warning(self, "Input Error", f"Nieprawidłowe dane wejściowe: {e}")
