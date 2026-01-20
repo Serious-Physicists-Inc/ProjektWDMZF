@@ -13,12 +13,20 @@ from scipy.spatial import cKDTree
 
 class StateSpec:
     def __new__(cls, n: int, l: int, m: int):
-        if n < 1:
-            raise ValueError("The value of the principal quantum number 'n' must be greater than 0.")
-        if l >= n:
-            raise ValueError("The value of the secondary quantum number 'l' must be less than the value of the principal quantum number.")
+        if type(n) is not int:
+            raise TypeError("Główna liczba kwantowa 'n' musi być całkowita")
+        elif n < 1:
+            raise ValueError("Wartość głównej liczby kwantowej 'n' musi być większa od 0")
+
+        if type(l) is not int:
+            raise TypeError("Poboczna liczba kwantowa 'l' musi być całkowita")
+        elif l >= n:
+            raise ValueError("Wartość pobocznej liczby kwantowej 'l' musi być mniejsza od wartości głównej liczby kwantowej")
+
+        if type(m) is not int:
+            raise TypeError("Magnetyczna liczba kwantowa 'm' musi być całkowita")
         if m < -l or m > l:
-            raise ValueError("The magnetic number 'm' modulus cannot be greater than the secondary quantum number modulus.")
+            raise ValueError("Moduł magnetycznej liczby kwantowej 'm' musi być mniejszy od wartości pobocznej liczby kwantowej")
 
         return super().__new__(cls)
     def __init__(self, n: int, l: int, m: int) -> None:
@@ -83,7 +91,7 @@ class EnergyFunction:
 class Atom:
     def __new__(cls, *args: State) -> Atom:
         if any(args[i] == args[j] for i in range(len(args)) for j in range(i + 1, len(args))):
-            raise ValueError("Two or more states passed as arguments are the same")
+            raise ValueError("Co najmniej dwa podane stany kwantowe są takie same")
         return super().__new__(cls)
     def __init__(self, *args: State) -> None:
         self.__states = args

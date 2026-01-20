@@ -3,7 +3,7 @@ from typing import Tuple, Union, Literal, Callable, Optional
 from dataclasses import dataclass
 import sys
 
-from .ntypes import ColormapT, SphDims, Scatter, Volume
+from .ntypes import ColormapTypeT, SphDims, Scatter, Volume
 from .model import StateSpec, State, Atom, Plotter
 from .plot import PlotWindowSpec, PlotWindow, ScatterPlotWindow, VolumePlotWindow
 from .scheduler import *
@@ -118,7 +118,7 @@ class Settings:
     fps: int = 20
     speed: float = 1
     plot_type: Literal['ScatterPlot', 'VolumePlot'] = 'ScatterPlot'
-    plot_colormap: ColormapT = 'plasma'
+    plot_colormap: ColormapTypeT = 'plasma'
 
 settings: Settings = Settings()
 

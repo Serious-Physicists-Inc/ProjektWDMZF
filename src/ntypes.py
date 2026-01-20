@@ -1,23 +1,25 @@
 # python internals
 from __future__ import annotations
-from typing import Tuple, NamedTuple, Literal
+from typing import TypeAlias, Tuple, NamedTuple, Literal
 from dataclasses import dataclass
 import math
 # external packages
+from pyqtgraph import ColorMap
 import numpy as np
 import numpy.typing as npt
 
 # type hints definitions
-NPFloatT = np.float32
-NPIntT = np.int32
-NPUintT = np.uint8
-NPComplexT = np.complex64
-NPArrayT = np.ndarray
-NPFArrayT = npt.NDArray[NPFloatT]
-NPUArrayT = npt.NDArray[NPUintT]
-NPCArrayT = npt.NDArray[NPComplexT]
-NPBArrayT = npt.NDArray[bool]
-ColormapT = Literal['plasma', 'inferno', 'viridis', 'turbo', 'cividis']
+NPFloatT: TypeAlias = np.float32
+NPIntT: TypeAlias = np.int32
+NPUintT: TypeAlias = np.uint8
+NPComplexT: TypeAlias = np.complex64
+NPArrayT: TypeAlias = np.ndarray
+NPFArrayT: TypeAlias = npt.NDArray[NPFloatT]
+NPUArrayT: TypeAlias = npt.NDArray[NPUintT]
+NPCArrayT: TypeAlias = npt.NDArray[NPComplexT]
+NPBArrayT: TypeAlias = npt.NDArray[bool]
+ColormapT: TypeAlias = ColorMap
+ColormapTypeT: TypeAlias = Literal['plasma', 'inferno', 'viridis', 'turbo', 'cividis']
 
 # type definitions
 class SphDims(NamedTuple):
@@ -72,4 +74,5 @@ class Volume:
         cutoff = np.max(self.val) * factor
         return Volume(np.where(self.val > cutoff, self.val, 0.0))
 
-__all__ = ['NPFloatT', 'NPIntT', 'NPUintT', 'NPComplexT', 'NPArrayT', 'NPFArrayT', 'NPUArrayT', 'NPCArrayT', 'NPBArrayT', 'ColormapT', 'SphDims', 'CartDims', 'SphPointsGrid', 'CartPointsGrid', 'SphPoints', 'CartPoints', 'Scatter', 'Volume']
+__all__ = ['NPFloatT', 'NPIntT', 'NPUintT', 'NPComplexT', 'NPArrayT', 'NPFArrayT', 'NPUArrayT', 'NPCArrayT', 'NPBArrayT', 'ColormapT',
+           'ColormapTypeT', 'SphDims', 'CartDims', 'SphPointsGrid', 'CartPointsGrid', 'SphPoints', 'CartPoints', 'Scatter', 'Volume']
