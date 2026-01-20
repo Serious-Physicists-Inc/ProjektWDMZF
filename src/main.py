@@ -5,12 +5,13 @@ import sys
 
 from .ntypes import ColormapT, SphDims, Scatter, Volume
 from .model import StateSpec, State, Atom, Plotter
-from .plot import *
+from .plot import PlotWindowSpec, PlotWindow, ScatterPlotWindow, VolumePlotWindow
 from .scheduler import *
+import numpy as np
 
-from PyQt6.QtWidgets import QApplication, QWidget, QVBoxLayout, QTabWidget, QCheckBox, QPushButton, QFormLayout, QLineEdit, QLabel, QMessageBox, QSlider, QHBoxLayout, QScrollArea, QFrame, QSizePolicy, QGraphicsDropShadowEffect
+from PyQt6.QtWidgets import QApplication, QWidget, QVBoxLayout, QTabWidget, QCheckBox, QPushButton, QFormLayout, QLineEdit, QLabel, QMessageBox, QSlider, QHBoxLayout, QScrollArea, QFrame, QSizePolicy, QGraphicsDropShadowEffect, QFileDialog
 from PyQt6.QtCore import Qt, QPropertyAnimation, QEasingCurve, pyqtProperty, QRectF
-from PyQt6.QtGui import QPainter, QColor, QPen, QFont, QIcon, QColorConstants
+from PyQt6.QtGui import QPainter, QColor, QPen, QFont, QIcon, QColorConstants, QImage
 
 import traceback
 
@@ -96,6 +97,7 @@ QPushButton#DestructiveButton {
     color: #ff6b6b;
     border: 1px solid #ff6b6b;
     font-weight: bold;
+    font-size: 15px;
 }
 QPushButton#DestructiveButton:hover {
     background-color: #ff6b6b;
@@ -193,9 +195,9 @@ class StateRow(QWidget):
             inp.setFixedWidth(50)
             inp.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
-        self.btn_remove = QPushButton("✕")
+        self.btn_remove = QPushButton("X")
         self.btn_remove.setObjectName("DestructiveButton")
-        self.btn_remove.setFixedWidth(30)
+        self.btn_remove.setFixedWidth(36)
         self.btn_remove.setCursor(Qt.CursorShape.PointingHandCursor)
         self.btn_remove.clicked.connect(self.remove_self)
 
@@ -340,6 +342,27 @@ class Window(QWidget):
         self.btn_apply.clicked.connect(self.process_inputs)
         main_layout.addWidget(self.btn_apply)
 
+    def take_snapshot(self):
+        target_type = 'VolumePlot' if self.chk_volume.isChecked() else 'ScatterPlot'
+        cache = self.plot_cache.get()
+
+        if not cache or cache['window'] is None:
+            QMessageBox.warning(self, "Błąd", "Brak aktywnego wykresu.")
+            return
+
+        img_array = cache['window'].snapshot()
+
+        file_path, _ = QFileDialog.getSaveFileName(self, "Zapisz", "snapshot.png", "Images (*.png)")
+
+        if file_path:
+            height, width, _ = img_array.shape
+
+            if not img_array.flags['C_CONTIGUOUS']:
+                img_array = np.ascontiguousarray(img_array)
+
+        q_img = QImage(img_array.data, width, height, width * 4, QImage.Format.Format_RGBA8888)
+        q_img.save(file_path)
+
     def Dstate(self):
         Tab1 = QWidget()
 
@@ -351,6 +374,8 @@ class Window(QWidget):
 
         self.window_settings = QPushButton("Zrzut ekranu")
         self.window_settings.setMinimumHeight(40)
+        self.window_settings.clicked.connect(self.take_snapshot)
+
 
         layout.addWidget(info_label)
         layout.addWidget(self.window_settings)
