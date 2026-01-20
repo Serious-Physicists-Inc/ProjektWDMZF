@@ -4,7 +4,7 @@ from typing import Tuple, Union, Literal, Optional
 from dataclasses import dataclass
 import sys
 # internal packages
-from .ntypes import ColormapT, SphDims, Scatter, Volume
+from .ntypes import ColormapTypeT, SphDims, Scatter, Volume
 from .model import StateSpec, State, Atom, Plotter
 from .scheduler import Scheduler
 from .plot import *
@@ -14,37 +14,42 @@ from PyQt6.QtWidgets import QApplication
 @dataclass
 class Settings:
     interactive: bool = True
-    fps: int = 30
-    speed: float = 0.5
+    fps: int = 25
+    speed: float = 0.25
     plot_type: Literal['ScatterPlot', 'VolumePlot'] = 'ScatterPlot'
-    plot_colormap: ColormapT = 'plasma'
+    plot_dims: SphDims = SphDims(100, 100)
+    plot_colormap: ColormapTypeT = 'plasma'
+    show_hud: bool = True
+    show_colorbar: bool = True
 
 settings: Settings = Settings()
 
 def main() -> Tuple[Union[ScatterPlotWindow, VolumePlotWindow], Optional[Scheduler]]:
-    states = (State(StateSpec(2, 0, 0)),State(StateSpec(2, 1, 0)))
+    states = (State(StateSpec(2, 0, 0)), State(StateSpec(2, 1, 0)))
     atom = Atom(*states)
 
     plot_spec: PlotWindowSpec = PlotWindowSpec(
-        title="Electron cloud of a hydrogen atom",
-        cmap_name=settings.plot_colormap
+        title="Chmura elektronowa atomu wodoru",
+        cmap_name=settings.plot_colormap,
+        show_hud=settings.show_hud,
+        show_colorbar=settings.show_colorbar
     )
 
-    plotter = Plotter(atom, SphDims(100, 100))
+    plotter = Plotter(atom, settings.plot_dims)
     if settings.plot_type == 'ScatterPlot':
         source = plotter.scatter()
         plot = ScatterPlotWindow(plot_spec)
     elif settings.plot_type == 'VolumePlot':
         source = plotter.volume()
         plot = VolumePlotWindow(plot_spec)
-    else: raise ValueError(f"Unknown value of settings.plot_type: {settings.plot_type}")
+    else: raise ValueError("Ustawiono nieprawidłowy typ wykresu")
     plot.draw(source.val().masked())
     plot.show()
 
     scheduler: Optional[Scheduler] = None
     if settings.interactive:
         def callback(i: int) -> Union[Scatter, Volume]:
-            return source.val(i * settings.speed / settings.fps).masked()
+            return source.val(i * settings.speed).masked()
 
         scheduler = plot.auto_update(callback, settings.fps)
 
@@ -67,7 +72,7 @@ def main() -> Tuple[Union[ScatterPlotWindow, VolumePlotWindow], Optional[Schedul
                 f"speed:{' ' * 12}{settings.speed:.3g}\n"
                 + f"fps:{' ' * 14}{fps_avg:.3g}\nspec:\n"
                 + "\n".join(
-                    f"{' ' * 5}({s.n}, {s.l}, {s.m}),\n"
+                    f"{' ' * 5}({s.n}, {s.l}, {s.m}):\n"
                     f"{' ' * 7}en: {en_vals[(s.n, s.l, s.m)]: .6g} eV"
                     for s in atom.specs
                 )

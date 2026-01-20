@@ -21,12 +21,13 @@ class PlotWindowSpec:
     text_color: Tuple[int, int, int] = (255, 255, 255)
     show_hud: bool = True
     show_colorbar: bool = True
-    cmap_name: ColormapT = 'plasma'
+    cmap_name: ColormapTypeT = 'plasma'
 
 class PlotWindow:
     def __init__(self, spec: PlotWindowSpec) -> None:
         self.__scheduler: Optional[Scheduler] = None
         self.__worker: Optional[Worker] = None
+        self.__scale: float = 0
 
         self._view = WindowView()
         self._view.setWindowTitle(spec.title)
@@ -39,7 +40,6 @@ class PlotWindow:
         self._view.windowCloseOccurred.connect(self.__on_window_close)
 
         self._view.plot.setBackgroundColor(spec.bg_color)
-        self._view.plot.setCameraPosition(distance=10.0, elevation=20.0, azimuth=45.0)
 
         self._cmap = pg.colormap.get(spec.cmap_name)
 
@@ -52,17 +52,26 @@ class PlotWindow:
         if spec.show_colorbar:
             self._view.colorbar = ColorBar(self._view)
             self._view.colorbar.colormap = self._cmap
+            self._view.colorbar.normalize_function = self._normalize
             self._view.colorbar.show()
+
+    def _normalize(self, val: NPFArrayT) -> NPFArrayT:
+        v_log = np.log1p(np.maximum(val, 0.0))
+        v_norm = v_log / self.__scale
+        return v_norm
     def draw(self, val: Union[Scatter, Volume]) -> None:
+        vmax = np.max(val.val)
+        self.__scale = vmax
         if self._view.colorbar is not None:
-            self._view.colorbar.set_scale(np.max(val.val))
+            self._view.colorbar.set_scale(vmax)
             self._view.colorbar.set_val(val.val)
     def update(self, val: Union[Scatter, Volume]) -> None:
         if self._view.colorbar is not None:
             vmax = np.max(val.val)
-            if self._view.colorbar.scale < vmax:
-                self._view.colorbar.set_scale(np.max(val.val))
-            self._view.colorbar.set_val(val.val)
+            if self.__scale < vmax:
+                self.__scale = vmax
+                self._view.colorbar.set_scale(self.__scale)
+                self._view.colorbar.set_val(val.val)
     def auto_update(self, function: Callable[[int], Union[Scatter, Volume]], fps: int) -> Scheduler:
         if self.__scheduler is not None:
             self.__scheduler.abort()
@@ -82,7 +91,7 @@ class PlotWindow:
         self._view.show()
     def set_hud(self, text: str) -> None:
         if self._view.hud is None:
-            raise RuntimeError("Hud has not been initialized")
+            raise RuntimeError("Hud nie został zainicjowany")
         self._view.hud.setText(text)
     def center(self) -> None: pass
     def snapshot(self) -> NPUArrayT:
@@ -94,6 +103,8 @@ class PlotWindow:
 
         arr = np.frombuffer(ptr, NPUintT).reshape((img.height(), img.width(), 4))
         return np.flipud(np.copy(arr))
+    def abort(self) -> None:
+        self._view.close()
     def __on_mouse_press(self) -> None:
         if self.__scheduler is not None:
             self.__scheduler.block()
@@ -127,13 +138,7 @@ class ScatterPlotWindow(PlotWindow):
         super().__init__(spec)
         self.__scatter: Optional[gl.GLScatterPlotItem] = None
     def __color(self, sc: Scatter) -> NPFArrayT:
-        v = np.maximum(sc.val, 0.0)
-        v_log = np.log1p(v)
-        vmax = np.max(v_log)
-        v_norm = v_log / vmax if vmax > 0 else v_log
-
-        gamma = 0.4
-        rgba = self._cmap.map(v_norm ** gamma, mode='float')
+        rgba = self._cmap.map(self._normalize(sc.val) ** 0.4, mode='float')
         rgba[:, 3] = 1.0
         return np.ascontiguousarray(rgba)
     def draw(self, sc: Scatter) -> None:
@@ -146,7 +151,7 @@ class ScatterPlotWindow(PlotWindow):
         self._view.plot.addItem(self.__scatter)
     def update(self, sc: Scatter) -> None:
         if self.__scatter is None:
-            raise RuntimeError("Scatter plot has not been drawn yet.")
+            raise RuntimeError("Wykres punktowy nie został narysowany")
 
         super().update(sc)
         self.__scatter.setData(pos=np.column_stack(sc.points), color=self.__color(sc))
@@ -161,16 +166,10 @@ class VolumePlotWindow(PlotWindow):
         super().__init__(spec)
         self.__volume: Optional[gl.GLVolumeItem] = None
     def __color(self, vl: Volume) -> NPUArrayT:
-        v = np.maximum(vl.val, 0.0)
-        v_log = np.log1p(v)
-        vmax = np.max(v_log)
+        v_norm = self._normalize(vl.val)
 
-        v_norm = v_log / vmax if vmax > 0 else v_log
-
-        gamma = 0.4
-        c = v_norm ** gamma
-        rgba = self._cmap.map(c, mode='float').reshape((*v_norm.shape, 4))
-        rgba[..., 3] = v_norm**0.6
+        rgba = self._cmap.map(v_norm ** 0.4, mode='float').reshape((*v_norm.shape, 4))
+        rgba[..., 3] = v_norm ** 0.5
         return np.ascontiguousarray((rgba * 255).astype(NPUintT))
     def draw(self, vl: Volume) -> None:
         if self.__volume is not None:
@@ -183,7 +182,7 @@ class VolumePlotWindow(PlotWindow):
         self._view.plot.addItem(self.__volume)
     def update(self, vl: Volume) -> None:
         if self.__volume is None:
-            raise RuntimeError("Volume plot has not been drawn yet")
+            raise RuntimeError("Wykres chmurowy nie został narysowany")
 
         super().update(vl)
         self.__volume.setData(self.__color(vl))

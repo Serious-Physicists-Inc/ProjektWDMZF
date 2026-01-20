@@ -1,11 +1,12 @@
 # python internals
 from __future__ import annotations
-from typing import Optional
+from typing import Optional, Callable
 # internal packages
 from .ntypes import *
 # external packages
 from PyQt6.QtCore import Qt, QObject, QEvent, pyqtSignal
-from PyQt6.QtGui import QFont, QImage, QPixmap, QCloseEvent, QHideEvent, QShowEvent
+from PyQt6.QtGui import QFont, QImage, QPixmap, QMouseEvent, QWheelEvent, QCloseEvent, QHideEvent, QShowEvent, \
+    QResizeEvent
 from PyQt6.QtWidgets import QWidget, QLabel, QHBoxLayout, QGridLayout, QVBoxLayout, QSizePolicy
 import numpy as np
 import pyqtgraph as pg
@@ -16,6 +17,7 @@ class ColorBar(QWidget):
         super().__init__(parent)
 
         self.__cmap: Optional[ColormapT] = None
+        self.__norm_func: Optional[Callable[[NPFloatT], NPFloatT]] = None
         self.__scale: NPFloatT = 1.0
         self.__nticks: NPIntT = 5
 
@@ -39,14 +41,13 @@ class ColorBar(QWidget):
         main_layout.addLayout(self.__labels_layout)
 
         self.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Expanding)
-        self.__set_labels()
         self.hide()
     @property
     def scale(self) -> NPFloatT:
         return self.__scale
     def set_scale(self, value: NPFloatT) -> None:
         if value <= 0.0:
-            raise ValueError("scale must be positive")
+            raise ValueError("Wartość skali musi być większa od 0")
 
         self.__scale = value
         self.__set_labels()
@@ -56,14 +57,16 @@ class ColorBar(QWidget):
     @colormap.setter
     def colormap(self, cmap: ColormapT) -> None:
         self.__cmap = cmap
-    def __normalize(self, val: NPFArrayT) -> NPFArrayT:
-        v_log = np.log1p(val)
-        vmax_log = np.max(v_log)
-        v_norm = v_log / vmax_log
-
-        gamma = 0.4
-        return v_norm ** gamma
+    @property
+    def normalize_function(self):
+        return self.__norm_func
+    @normalize_function.setter
+    def normalize_function(self, func: Callable[[NPFloatT], NPFloatT]) -> None:
+        self.__norm_func = func
     def __set_labels(self) -> None:
+        if self.__norm_func is None:
+            raise ValueError("Funkcja normalizacyjna nie została ustawiona")
+
         for lbl in self.__labels:
             lbl.deleteLater()
         self.__labels.clear()
@@ -71,8 +74,8 @@ class ColorBar(QWidget):
         while self.__labels_layout.count():
             self.__labels_layout.takeAt(0)
 
-        val = np.linspace(0.0, self.__scale, 512)
-        vnorm = self.__normalize(val)
+        val = np.linspace(0.0, self.__scale, 256)
+        vnorm = self.__norm_func(val)
 
         target = np.linspace(1.0, 0.0, self.__nticks + 1)[:-1]
 
@@ -89,14 +92,16 @@ class ColorBar(QWidget):
             self.__labels_layout.addWidget(lbl, i * 2, 0)
             self.__labels.append(lbl)
     def set_val(self, val: NPFArrayT) -> None:
-        if self.__cmap is None: return
+        if self.__cmap is None:
+            raise ValueError("Mapa kolorów nie została ustawiona")
+        if self.__norm_func is None:
+            raise ValueError("Funkcja normalizacyjna nie została ustawiona")
 
         vmax = np.max(val)
         resolution = 256
         used = int(np.clip(vmax / self.__scale, 0.0, 1.0) * resolution)
 
-        v = np.linspace(vmax, 0.0, used)
-        vnorm = self.__normalize(v)
+        vnorm = self.__norm_func(np.linspace(vmax, 0.0, used))
 
         rgba = np.zeros((resolution, 4), dtype=NPFloatT)
 
@@ -106,7 +111,6 @@ class ColorBar(QWidget):
         img = (rgba * 255).astype(np.uint8).reshape((resolution, 1, 4))
         qimg = QImage(img.data,img.shape[1], img.shape[0], img.strides[0], QImage.Format.Format_RGBA8888)
         self.__bar.setPixmap(QPixmap.fromImage(qimg))
-
 
 class Hud(QLabel):
     def __init__(self, parent: Optional[QWidget] = None) -> None:
@@ -118,6 +122,36 @@ class Hud(QLabel):
 
         self.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
         self.hide()
+
+class PlotView(gl.GLViewWidget):
+    mousePressOccurred = pyqtSignal()
+    mouseReleaseOccurred = pyqtSignal()
+    wheelScrollOccurred = pyqtSignal()
+    def __init__(self, *args, **kwargs) -> None:
+        super().__init__(*args, **kwargs)
+
+        self.setCameraPosition(distance=30.0, elevation=20.0, azimuth=45.0)
+    def mousePressEvent(self, ev: QMouseEvent) -> None:
+        self.mousePressOccurred.emit()
+        super().mousePressEvent(ev)
+    def mouseReleaseEvent(self, ev: QMouseEvent) -> None:
+        self.mouseReleaseOccurred.emit()
+        super().mouseReleaseEvent(ev)
+    def wheelEvent(self, ev: QWheelEvent) -> None:
+        delta = ev.angleDelta().y()
+        if delta == 0:
+            ev.ignore()
+            return
+
+        self.wheelScrollOccurred.emit()
+
+        distance = self.opts['distance']
+        scale = 0.999 ** delta
+        new_distance = distance * scale
+        if 25 <= new_distance <= 160:
+            self.setCameraPosition(distance=new_distance)
+
+        ev.accept()
 
 class WindowView(QWidget):
     mousePressOccurred = pyqtSignal()
@@ -134,8 +168,10 @@ class WindowView(QWidget):
         self.__hud: Optional[Hud] = None
         self.__colorbar: Optional[ColorBar] = None
 
-        self.__plot = gl.GLViewWidget(self)
-        self.__plot.installEventFilter(self)
+        self.__plot = PlotView(self)
+        self.__plot.mousePressOccurred.connect(self.mousePressOccurred)
+        self.__plot.mouseReleaseOccurred.connect(self.mouseReleaseOccurred)
+        self.__plot.wheelScrollOccurred.connect(self.wheelScrollOccurred)
 
         self.__main_layout = QHBoxLayout(self)
         self.__main_layout.setContentsMargins(0, 0, 0, 0)
@@ -196,22 +232,12 @@ class WindowView(QWidget):
         if colorbar is not None:
             self.__colorbar_layout.addWidget(colorbar)
             colorbar.show()
-    def eventFilter(self, obj: QObject, ev: QEvent) -> bool:
-        if obj is self.__plot:
-            if ev.type() == QEvent.Type.MouseButtonPress:
-                self.mousePressOccurred.emit()
-            elif ev.type() == QEvent.Type.MouseButtonRelease:
-                self.mouseReleaseOccurred.emit()
-            elif ev.type() == QEvent.Type.Wheel:
-                self.wheelScrollOccurred.emit()
-            elif ev.type() == QEvent.Type.Resize:
-                self.resizeOccurred.emit()
-
-        return super().eventFilter(obj, ev)
+    def resizeEvent(self, ev: Optional[QResizeEvent]) -> None:
+        self.resizeOccurred.emit()
+        super().resizeEvent(ev)
     def hideEvent(self, ev: Optional[QHideEvent]) -> None:
         self.windowMinimizeOccurred.emit()
         super().hideEvent(ev)
-
     def showEvent(self, ev: Optional[QShowEvent]) -> None:
         self.windowRestoreOccurred.emit()
         super().showEvent(ev)
