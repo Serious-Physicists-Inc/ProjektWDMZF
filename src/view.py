@@ -149,7 +149,7 @@ class PlotView(gl.GLViewWidget):
         distance = self.opts['distance']
         scale = 0.999 ** delta
         new_distance = distance * scale
-        if 25 <= new_distance <= 160:
+        if 25 <= new_distance:
             self.setCameraPosition(distance=new_distance)
 
         ev.accept()

@@ -91,6 +91,8 @@ class Window:
         return self.__scheduler
     def show(self) -> None:
         self._view.show()
+    def showMaximized(self) -> None:
+        self._view.showMaximized()
     def set_hud(self, text: str) -> None:
         if self._view.hud is None:
             raise RuntimeError("Hud nie został zainicjowany")
