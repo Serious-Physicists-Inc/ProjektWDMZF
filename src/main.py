@@ -7,7 +7,7 @@ import pyqtgraph as pg
 
 from .ntypes import ColormapTypeT, SphDims, Scatter, Volume
 from .model import StateSpec, State, Atom, Plotter
-from .plot import PlotWindowSpec, PlotWindow, ScatterPlotWindow, VolumePlotWindow
+from .plot import Window, WindowSpec, ScatterWindow, VolumeWindow
 from .scheduler import *
 import numpy as np
 
@@ -167,8 +167,8 @@ settings: Settings = Settings()
 
 
 def launch_custom_plot(atom: Atom, settings: Settings, rows: list[StateRow]) -> Tuple[
-    Union[ScatterPlotWindow, VolumePlotWindow], Optional[Scheduler]]:
-    plot_spec: PlotWindowSpec = PlotWindowSpec(
+    Union[ScatterWindow, VolumeWindow], Optional[Scheduler]]:
+    plot_spec: WindowSpec = WindowSpec(
         title="Chmura elektronowa atomu wodoru",
         cmap_name=settings.plot_colormap,
         show_hud=settings.show_hud,
@@ -179,10 +179,10 @@ def launch_custom_plot(atom: Atom, settings: Settings, rows: list[StateRow]) -> 
 
     if settings.plot_type == 'ScatterPlot':
         source = plotter.scatter()
-        plot = ScatterPlotWindow(plot_spec)
+        plot = ScatterWindow(plot_spec)
     elif settings.plot_type == 'VolumePlot':
         source = plotter.volume()
-        plot = VolumePlotWindow(plot_spec)
+        plot = VolumeWindow(plot_spec)
     else:
         raise ValueError(f"Unknown value: {settings.plot_type}")
 
