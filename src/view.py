@@ -88,6 +88,7 @@ class ColorBar(QWidget):
         for i, v in enumerate(values):
             lbl = QLabel(f"{v:.3f}", self)
             lbl.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop)
+            lbl.setPalette(self.palette())
 
             self.__labels_layout.addWidget(lbl, i * 2, 0)
             self.__labels.append(lbl)
