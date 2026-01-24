@@ -5,7 +5,7 @@ import sys
 
 from .ntypes import ColormapTypeT, SphDims, Scatter, Volume
 from .model import StateSpec, State, Atom, Plotter
-from .plot import PlotWindowSpec, PlotWindow, ScatterPlotWindow, VolumePlotWindow
+from .plot import WindowSpec, Window, ScatterWindow, VolumeWindow
 from .scheduler import *
 import numpy as np
 
@@ -122,8 +122,8 @@ class Settings:
 
 settings: Settings = Settings()
 
-def launch_custom_plot(atom: Atom, settings: Settings) -> Tuple[Union[ScatterPlotWindow, VolumePlotWindow], Optional[Scheduler]]:
-    plot_spec: PlotWindowSpec = PlotWindowSpec(
+def launch_custom_plot(atom: Atom, settings: Settings) -> Tuple[Union[ScatterWindow, VolumeWindow], Optional[Scheduler]]:
+    plot_spec: WindowSpec = WindowSpec(
         title="Chmura elektronowa atomu wodoru",
         cmap_name=settings.plot_colormap
     )
@@ -131,10 +131,10 @@ def launch_custom_plot(atom: Atom, settings: Settings) -> Tuple[Union[ScatterPlo
     plotter = Plotter(atom, SphDims(100, 100))
     if settings.plot_type == 'ScatterPlot':
         source = plotter.scatter()
-        plot = ScatterPlotWindow(plot_spec)
+        plot = ScatterWindow(plot_spec)
     elif settings.plot_type == 'VolumePlot':
         source = plotter.volume()
-        plot = VolumePlotWindow(plot_spec)
+        plot = VolumeWindow(plot_spec)
     else:
         raise ValueError(f"Unknown value of settings.plot_type: {settings.plot_type}")
     plot.draw(source.val().masked())
@@ -527,7 +527,7 @@ class Window(QWidget):
                 if cache_entry['window'] is not None:
                     try:
                         cache_entry['window'].abort()
-                    except Exception:
+                    except Exception as e:
                         pass
                     cache_entry['window'] = None
                     cache_entry['scheduler'] = None

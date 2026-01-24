@@ -9,7 +9,10 @@ from .model import StateSpec, State, Atom, Plotter
 from .scheduler import Scheduler
 from .plot import *
 # external packages
+from PyQt6 import QtCore, QtWidgets
 from PyQt6.QtWidgets import QApplication
+
+QtWidgets.QApplication.setAttribute(QtCore.Qt.ApplicationAttribute.AA_ShareOpenGLContexts)
 
 @dataclass
 class Settings:
@@ -24,11 +27,11 @@ class Settings:
 
 settings: Settings = Settings()
 
-def main() -> Tuple[Union[ScatterPlotWindow, VolumePlotWindow], Optional[Scheduler]]:
+def main() -> Tuple[Union[ScatterWindow, VolumeWindow], Optional[Scheduler]]:
     states = (State(StateSpec(2, 0, 0)), State(StateSpec(2, 1, 0)))
     atom = Atom(*states)
 
-    plot_spec: PlotWindowSpec = PlotWindowSpec(
+    plot_spec: WindowSpec = WindowSpec(
         title="Chmura elektronowa atomu wodoru",
         cmap_name=settings.plot_colormap,
         show_hud=settings.show_hud,
@@ -38,10 +41,10 @@ def main() -> Tuple[Union[ScatterPlotWindow, VolumePlotWindow], Optional[Schedul
     plotter = Plotter(atom, settings.plot_dims)
     if settings.plot_type == 'ScatterPlot':
         source = plotter.scatter()
-        plot = ScatterPlotWindow(plot_spec)
+        plot = ScatterWindow(plot_spec)
     elif settings.plot_type == 'VolumePlot':
         source = plotter.volume()
-        plot = VolumePlotWindow(plot_spec)
+        plot = VolumeWindow(plot_spec)
     else: raise ValueError("Ustawiono nieprawidłowy typ wykresu")
     plot.draw(source.val().masked())
     plot.show()
