@@ -8,14 +8,13 @@ from .scheduler import Scheduler
 from .worker import Worker
 from .view import WindowView, Hud, ColorBar
 # external packages
-from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QColor, QPalette
 import numpy as np
 import pyqtgraph as pg
 import pyqtgraph.opengl as gl
 
 @dataclass
-class PlotWindowSpec:
+class WindowSpec:
     title: str = ""
     bg_color: Tuple[int, int, int] = (0, 0, 0)
     text_color: Tuple[int, int, int] = (255, 255, 255)
@@ -23,8 +22,8 @@ class PlotWindowSpec:
     show_colorbar: bool = True
     cmap_name: ColormapTypeT = 'plasma'
 
-class PlotWindow:
-    def __init__(self, spec: PlotWindowSpec) -> None:
+class Window:
+    def __init__(self, spec: WindowSpec) -> None:
         self.__scheduler: Optional[Scheduler] = None
         self.__worker: Optional[Worker] = None
         self.__scale: float = 0
@@ -133,8 +132,8 @@ class PlotWindow:
             self.__worker.abort()
             self.__worker = None
 
-class ScatterPlotWindow(PlotWindow):
-    def __init__(self, spec: PlotWindowSpec = PlotWindowSpec()) -> None:
+class ScatterWindow(Window):
+    def __init__(self, spec: WindowSpec = WindowSpec()) -> None:
         super().__init__(spec)
         self.__scatter: Optional[gl.GLScatterPlotItem] = None
     def __color(self, sc: Scatter) -> NPFArrayT:
@@ -161,8 +160,8 @@ class ScatterPlotWindow(PlotWindow):
         center = self.__scatter.pos.mean(axis=0)
         self.__scatter.translate(-center[0], -center[1], -center[2])
 
-class VolumePlotWindow(PlotWindow):
-    def __init__(self, spec: PlotWindowSpec = PlotWindowSpec()) -> None:
+class VolumeWindow(Window):
+    def __init__(self, spec: WindowSpec = WindowSpec()) -> None:
         super().__init__(spec)
         self.__volume: Optional[gl.GLVolumeItem] = None
     def __color(self, vl: Volume) -> NPUArrayT:
@@ -193,4 +192,4 @@ class VolumePlotWindow(PlotWindow):
         center_offset = shape / 2
         self.__volume.translate(-center_offset[0], -center_offset[1], -center_offset[2])
 
-__all__ = ['PlotWindowSpec', 'ScatterPlotWindow', 'VolumePlotWindow']
+__all__ = ['WindowSpec', 'ScatterWindow', 'VolumeWindow']
