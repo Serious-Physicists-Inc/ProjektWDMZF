@@ -52,6 +52,9 @@ class Window:
             self._view.colorbar = ColorBar(self._view)
             self._view.colorbar.colormap = self._cmap
             self._view.colorbar.normalize_function = self._normalize
+            palette = self._view.colorbar.palette()
+            palette.setColor(QPalette.ColorRole.WindowText, QColor(*spec.text_color))
+            self._view.colorbar.setPalette(palette)
             self._view.colorbar.show()
 
     def _normalize(self, val: NPFArrayT) -> NPFArrayT:
