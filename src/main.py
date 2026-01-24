@@ -9,7 +9,7 @@ from .plot import PlotWindowSpec, PlotWindow, ScatterPlotWindow, VolumePlotWindo
 from .scheduler import *
 import numpy as np
 
-from PyQt6.QtWidgets import QApplication, QWidget, QVBoxLayout, QTabWidget, QCheckBox, QPushButton, QFormLayout, QLineEdit, QLabel, QMessageBox, QSlider, QHBoxLayout, QScrollArea, QFrame, QSizePolicy, QGraphicsDropShadowEffect, QFileDialog
+from PyQt6.QtWidgets import QApplication, QWidget, QVBoxLayout, QTabWidget, QCheckBox, QPushButton, QFormLayout, QLineEdit, QLabel, QMessageBox, QSlider, QHBoxLayout, QScrollArea, QFrame, QSizePolicy, QGraphicsDropShadowEffect, QFileDialog, QComboBox
 from PyQt6.QtCore import Qt, QPropertyAnimation, QEasingCurve, pyqtProperty, QRectF
 from PyQt6.QtGui import QPainter, QColor, QPen, QFont, QIcon, QColorConstants, QImage
 
@@ -293,6 +293,14 @@ class Window(QWidget):
         self.setWindowTitle("Menu")
         self.resize(500, 550)
 
+        self.current_atom = None
+
+        self.settings = Settings()
+        self.settings.speed: float = 1.0
+        self.settings.fps: float = 20
+        self.settings.interactive: bool = True
+        self.settings.plot_colormap: ColormapTypeT = 'plasma'
+
         self.plot_cache = {
             'ScatterPlot': {'window': None, 'scheduler': None},
             'VolumePlot': {'window': None, 'scheduler': None}
@@ -342,26 +350,57 @@ class Window(QWidget):
         self.btn_apply.clicked.connect(self.process_inputs)
         main_layout.addWidget(self.btn_apply)
 
-    def take_snapshot(self):
-        target_type = 'VolumePlot' if self.chk_volume.isChecked() else 'ScatterPlot'
-        cache = self.plot_cache.get()
+    def update_colormap(self, text):
+        self.settings.plot_colormap = text
+        print(f"Colormap changed to: {text}")
 
-        if not cache or cache['window'] is None:
-            QMessageBox.warning(self, "Błąd", "Brak aktywnego wykresu.")
+    def take_snapshot(self):
+        active_window = None
+
+        for key, cache in self.plot_cache.items():
+            win = cache['window']
+            if win is not None and win._view.isVisible():
+                active_window = win
+                break
+
+        if active_window is None:
+            QMessageBox.warning(self, "Błąd", "Nie wykryto aktywnego okna z wykresem.")
             return
 
-        img_array = cache['window'].snapshot()
+        try:
+            img_array = active_window.snapshot()
 
-        file_path, _ = QFileDialog.getSaveFileName(self, "Zapisz", "snapshot.png", "Images (*.png)")
+            file_path, _ = QFileDialog.getSaveFileName(
+                self,
+                "Zapisz zrzut ekranu",
+                "snapshot.png",
+                "Images (*.png *.jpg *.bmp)"
+            )
 
-        if file_path:
-            height, width, _ = img_array.shape
+            if file_path:
+                height, width, channels = img_array.shape
+                bytes_per_line = channels * width
 
-            if not img_array.flags['C_CONTIGUOUS']:
-                img_array = np.ascontiguousarray(img_array)
+                if not img_array.flags['C_CONTIGUOUS']:
+                    img_array = np.ascontiguousarray(img_array)
 
-        q_img = QImage(img_array.data, width, height, width * 4, QImage.Format.Format_RGBA8888)
-        q_img.save(file_path)
+                q_img = QImage(
+                    img_array.data,
+                    width,
+                    height,
+                    bytes_per_line,
+                    QImage.Format.Format_RGBA8888
+                )
+
+                if q_img.save(file_path):
+                    QMessageBox.information(self, "Sukces", f"Zapisano zrzut w:\n{file_path}")
+                else:
+                    QMessageBox.critical(self, "Błąd", "Nie udało się zapisać pliku.")
+
+        except Exception as e:
+            traceback.print_exc()
+            QMessageBox.critical(self, "Błąd", f"Wystąpił błąd:\n{e}")
+
 
     def Dstate(self):
         Tab1 = QWidget()
@@ -376,13 +415,40 @@ class Window(QWidget):
         self.window_settings.setMinimumHeight(40)
         self.window_settings.clicked.connect(self.take_snapshot)
 
+        form_layout = QFormLayout()
+
+        self.box_cmap = QComboBox()
+        available_maps = ['plasma', 'viridis', 'inferno', 'magma', 'cividis', 'grey']
+        self.box_cmap.addItems(available_maps)
+        self.box_cmap.currentTextChanged.connect(self.update_colormap)
+        form_layout.addRow("Kolor mapy:", self.box_cmap)
 
         layout.addWidget(info_label)
         layout.addWidget(self.window_settings)
+        layout.addLayout(form_layout)
         layout.addStretch()
 
+        self.lbl_speed = QLabel(f"Szybkość animacji: {self.settings.speed:.1f}x")
+        self.lbl_speed.setStyleSheet("font-weight: bold; color: #00BCff;")
+        layout.addWidget(self.lbl_speed)
+
+        self.speed_slider = QSlider(Qt.Orientation.Horizontal)
+        self.speed_slider.setMinimum(1)
+        self.speed_slider.setMaximum(20)
+        self.speed_slider.setValue(int(10*self.settings.speed))
+        self.speed_slider.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.speed_slider.valueChanged.connect(self.update_speed)
+
+        layout.addWidget(self.speed_slider)
+        layout.addStretch()
         Tab1.setLayout(layout)
         return Tab1
+
+    def update_speed(self, value):
+        new_speed = float(value) / 10.0
+
+        self.settings.speed = new_speed
+        self.lbl_speed.setText(f"Szybkość animacji: {new_speed:.1f}x")
 
     def Superposition(self):
         Tab2 = QWidget()
@@ -433,70 +499,48 @@ class Window(QWidget):
     def process_inputs(self):
         try:
             current_tab_index = self.tabs.currentIndex()
-            atom = None
 
             if current_tab_index == 0:
                 states_list = []
-
                 if not self.superposition_rows:
                     raise ValueError("Proszę dodać conajmniej jeden stan.")
 
                 for row in self.superposition_rows:
                     n, l, m = row.get_values()
                     states_list.append(State(StateSpec(n, l, m)))
+                self.current_atom = Atom(*states_list)
 
-                atom = Atom(*states_list)
+            elif current_tab_index == 1:
+                if self.current_atom is None:
+                    QMessageBox.warning(self, "Uwaga", "Najpierw utwórz atom w zakładce 'Kreator orbitali'.")
+                    return
+
+            atom_to_plot = self.current_atom
 
             target_type = 'VolumePlot' if self.chk_volume.isChecked() else 'ScatterPlot'
-            settings = Settings()
-            settings.plot_type = target_type
-            settings.interactive = True
-
             other_type = 'ScatterPlot' if target_type == 'VolumePlot' else 'VolumePlot'
-            other_cache = self.plot_cache[other_type]
-            if other_cache['window'] is not None:
-                try:
-                    other_cache['window']._view.hide()
-                    if other_cache['scheduler']:
-                        other_cache['scheduler'].abort()
-                except RuntimeError:
-                    other_cache['window'] = None
-                    other_cache['scheduler'] = None
+
+            self.settings.plot_type = target_type
+            self.settings.interactive = True
+
+            def destroy_window(cache_entry):        # <----- TUTAJ FUNCKJA ABORT
+                if cache_entry['window'] is not None:
+                    try:
+                        cache_entry['window'].abort()
+                    except Exception:
+                        pass
+                    cache_entry['window'] = None
+                    cache_entry['scheduler'] = None
+
+            destroy_window(self.plot_cache[other_type])
 
             target_cache = self.plot_cache[target_type]
+            destroy_window(target_cache)
 
-            window_exists = False
-            if target_cache['window'] is not None:
-                try:
-                    _ = target_cache['window']._view.isVisible()
-                    window_exists = True
-                except RuntimeError:
-                    window_exists = False
+            plot, scheduler = launch_custom_plot(atom_to_plot, self.settings)
 
-            if not window_exists:
-                plot, scheduler = launch_custom_plot(atom, settings)
-                target_cache['window'] = plot
-                target_cache['scheduler'] = scheduler
-            else:
-                plot = target_cache['window']
-                plot.show()
-
-                plotter = Plotter(atom, SphDims(100, 100))
-                if target_type == 'ScatterPlot':
-                    source = plotter.scatter()
-                else:
-                    source = plotter.volume()
-
-                plot.draw(source.val().masked())
-
-                if settings.interactive:
-                    if target_cache['scheduler']:
-                        target_cache['scheduler'].abort()
-
-                    def callback(i: int) -> Union[Scatter, Volume]:
-                        return source.val(i * settings.speed / settings.fps).masked()
-
-                    target_cache['scheduler'] = plot.auto_update(callback, settings.fps)
+            target_cache['window'] = plot
+            target_cache['scheduler'] = scheduler
 
         except ValueError as e:
             QMessageBox.warning(self, "Input Error", f"Nieprawidłowe dane wejściowe: {e}")
