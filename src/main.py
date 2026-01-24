@@ -2,6 +2,8 @@ from __future__ import annotations
 from typing import Tuple, Union, Literal, Callable, Optional
 from dataclasses import dataclass
 import sys
+import colorcet as cc
+import pyqtgraph as pg
 
 from .ntypes import ColormapTypeT, SphDims, Scatter, Volume
 from .model import StateSpec, State, Atom, Plotter
@@ -112,6 +114,45 @@ QFrame#StateCard {
 }
 """
 
+QApplication.setAttribute(Qt.ApplicationAttribute.AA_ShareOpenGLContexts)
+
+CUSTOM_MAPS = {}
+
+
+def create_pg_cmap(hex_list):
+    colors = []
+    for h in hex_list:
+        c = QColor(h)
+        colors.append([c.red(), c.green(), c.blue(), 255])
+
+    colors = np.array(colors, dtype=np.uint8)
+    positions = np.linspace(0.0, 1.0, len(colors))
+
+    return pg.ColorMap(positions, colors)
+
+favorites = {
+    'cc_fire': cc.fire,
+    'cc_glasbey': cc.glasbey,
+    'cc_bmy': cc.bmy,
+    'cc_coolwarm': cc.coolwarm,
+    'cc_rainbow': cc.rainbow,
+    'cc_kbc': cc.kbc
+}
+
+for name, hex_data in favorites.items():
+    CUSTOM_MAPS[name] = create_pg_cmap(hex_data)
+
+_original_pg_get = pg.colormap.get
+
+
+def patched_get_colormap(name, *args, **kwargs):
+    if name in CUSTOM_MAPS:
+        return CUSTOM_MAPS[name]
+    return _original_pg_get(name, *args, **kwargs)
+
+pg.colormap.get = patched_get_colormap
+
+
 @dataclass
 class Settings:
     interactive: bool = True
@@ -119,16 +160,23 @@ class Settings:
     speed: float = 1
     plot_type: Literal['ScatterPlot', 'VolumePlot'] = 'ScatterPlot'
     plot_colormap: ColormapTypeT = 'plasma'
+    show_hud: bool = True
+    show_colorbar: bool = True
 
 settings: Settings = Settings()
 
-def launch_custom_plot(atom: Atom, settings: Settings) -> Tuple[Union[ScatterPlotWindow, VolumePlotWindow], Optional[Scheduler]]:
+
+def launch_custom_plot(atom: Atom, settings: Settings, rows: list[StateRow]) -> Tuple[
+    Union[ScatterPlotWindow, VolumePlotWindow], Optional[Scheduler]]:
     plot_spec: PlotWindowSpec = PlotWindowSpec(
         title="Chmura elektronowa atomu wodoru",
-        cmap_name=settings.plot_colormap
+        cmap_name=settings.plot_colormap,
+        show_hud=settings.show_hud,
+        show_colorbar=settings.show_colorbar
     )
 
     plotter = Plotter(atom, SphDims(100, 100))
+
     if settings.plot_type == 'ScatterPlot':
         source = plotter.scatter()
         plot = ScatterPlotWindow(plot_spec)
@@ -136,27 +184,53 @@ def launch_custom_plot(atom: Atom, settings: Settings) -> Tuple[Union[ScatterPlo
         source = plotter.volume()
         plot = VolumePlotWindow(plot_spec)
     else:
-        raise ValueError(f"Unknown value of settings.plot_type: {settings.plot_type}")
+        raise ValueError(f"Unknown value: {settings.plot_type}")
+
     plot.draw(source.val().masked())
     plot.show()
 
     scheduler: Optional[Scheduler] = None
     if settings.interactive:
         def callback(i: int) -> Union[Scatter, Volume]:
-            return source.val(i * settings.speed / settings.fps).masked()
+            return source.val(i * settings.speed).masked()
 
         scheduler = plot.auto_update(callback, settings.fps)
 
+        en_vals = {}
+        for row in rows:
+            try:
+                n, l, m = row.get_values()
+                temp_state = State(StateSpec(n, l, m))
+                en_vals[(n, l, m)] = temp_state.energy_func().ev_val()
+            except Exception:
+                en_vals[(n, l, m)] = 0.0
+
         fps_rec = []
+
         def on_step(i: int) -> None:
-            nonlocal scheduler
             nonlocal fps_rec
 
-            fps = scheduler.fps
-            if fps > 0:
-                fps_rec.append(fps)
-                if len(fps_rec) > settings.fps:
-                    fps_rec.pop(0)
+            current_fps = scheduler.fps if scheduler else 0
+            fps_rec.append(current_fps)
+            if len(fps_rec) > settings.fps:
+                fps_rec.pop(0)
+            fps_avg = sum(fps_rec) / len(fps_rec) if fps_rec else 0.0
+
+            hud_text = (
+                f"Speed: {settings.speed:>10.2f}x\n"
+                f"FPS:   {fps_avg:>10.1f}\n"
+                f"Spec:\n"
+            )
+
+            for row in rows:
+                try:
+                    n, l, m = row.get_values()
+                    energy = en_vals.get((n, l, m), 0.0)
+                    hud_text += f"  ({n}, {l}, {m}): {energy:.4f} eV\n"
+                except:
+                    continue
+
+            plot.set_hud(hud_text)
 
         scheduler.stepOccurred.connect(on_step)
 
@@ -232,6 +306,10 @@ class StateRow(QWidget):
         except ValueError:
             raise ValueError("Wszystkie liczby kwantowe muszą być liczbami całkowitymi.")
 
+    def energy_state(self) -> Tuple[int, int, int]:
+        n, l, m = self.get_values
+        return n, l, m
+
 
 class ToggleSwitch(QCheckBox):
     def __init__(self, parent=None, width=50, height=26, bg_color="#4e5254", circle_color="#ffffff", active_color="#00BCff"):
@@ -296,10 +374,10 @@ class Window(QWidget):
         self.current_atom = None
 
         self.settings = Settings()
-        self.settings.speed: float = 1.0
-        self.settings.fps: float = 20
-        self.settings.interactive: bool = True
-        self.settings.plot_colormap: ColormapTypeT = 'plasma'
+        self.settings.speed = 1.0
+        self.settings.fps = 20
+        self.settings.interactive = True
+        self.settings.plot_colormap = 'plasma'
 
         self.plot_cache = {
             'ScatterPlot': {'window': None, 'scheduler': None},
@@ -418,7 +496,7 @@ class Window(QWidget):
         form_layout = QFormLayout()
 
         self.box_cmap = QComboBox()
-        available_maps = ['plasma', 'viridis', 'inferno', 'magma', 'cividis', 'grey']
+        available_maps = ['plasma', 'viridis', 'inferno', 'magma', 'cividis', 'grey','cc_fire', 'cc_glasbey', 'cc_bmy', 'cc_coolwarm', 'cc_rainbow', 'cc_kbc']
         self.box_cmap.addItems(available_maps)
         self.box_cmap.currentTextChanged.connect(self.update_colormap)
         form_layout.addRow("Kolor mapy:", self.box_cmap)
@@ -435,7 +513,7 @@ class Window(QWidget):
         self.speed_slider = QSlider(Qt.Orientation.Horizontal)
         self.speed_slider.setMinimum(1)
         self.speed_slider.setMaximum(20)
-        self.speed_slider.setValue(int(10*self.settings.speed))
+        self.speed_slider.setValue(int(self.settings.speed))
         self.speed_slider.setCursor(Qt.CursorShape.PointingHandCursor)
         self.speed_slider.valueChanged.connect(self.update_speed)
 
@@ -523,11 +601,11 @@ class Window(QWidget):
             self.settings.plot_type = target_type
             self.settings.interactive = True
 
-            def destroy_window(cache_entry):        # <----- TUTAJ FUNCKJA ABORT
+            def destroy_window(cache_entry):
                 if cache_entry['window'] is not None:
                     try:
                         cache_entry['window'].abort()
-                    except Exception:
+                    except Exception as e:
                         pass
                     cache_entry['window'] = None
                     cache_entry['scheduler'] = None
@@ -537,7 +615,7 @@ class Window(QWidget):
             target_cache = self.plot_cache[target_type]
             destroy_window(target_cache)
 
-            plot, scheduler = launch_custom_plot(atom_to_plot, self.settings)
+            plot, scheduler = launch_custom_plot(atom_to_plot, self.settings, self.superposition_rows)
 
             target_cache['window'] = plot
             target_cache['scheduler'] = scheduler
