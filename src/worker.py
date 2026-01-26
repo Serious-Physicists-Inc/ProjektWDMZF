@@ -6,7 +6,6 @@ from .buffer import Buffer
 from .ntypes import NPArrayT
 # external packages
 from PyQt6.QtCore import Qt, QObject, QThread, pyqtSignal, pyqtSlot
-import numpy as np
 
 class WorkerThread(QObject):
     resultReadyOccurred = pyqtSignal(object)

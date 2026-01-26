@@ -4,7 +4,7 @@ from typing import Optional, Callable
 # internal packages
 from .ntypes import *
 # external packages
-from PyQt6.QtCore import Qt, QObject, QEvent, pyqtSignal
+from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtGui import QFont, QImage, QPixmap, QMouseEvent, QWheelEvent, QCloseEvent, QHideEvent, QShowEvent, \
     QResizeEvent
 from PyQt6.QtWidgets import QWidget, QLabel, QHBoxLayout, QGridLayout, QVBoxLayout, QSizePolicy
