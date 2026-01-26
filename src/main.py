@@ -16,7 +16,7 @@ from PyQt6.QtGui import QFont, QImage, QIntValidator
 from PyQt6.QtWidgets import (
     QApplication, QWidget, QVBoxLayout, QHBoxLayout, QFormLayout,
     QTabWidget, QCheckBox, QPushButton, QLineEdit, QComboBox,
-    QLabel, QMessageBox, QSlider, QScrollArea, QFrame, QFileDialog)
+    QLabel, QMessageBox, QSlider, QScrollArea, QFileDialog)
 import pyqtgraph as pg
 
 QApplication.setAttribute(Qt.ApplicationAttribute.AA_ShareOpenGLContexts)
@@ -155,7 +155,7 @@ class MainWindow(QWidget):
         lbl_speed_title = QLabel("Szybkość animacji:")
         lbl_speed_title.setStyleSheet("font-weight: bold; color: #00BCff;")
 
-        self.__lbl_speed_value = QLabel("0.1")
+        self.__lbl_speed_value = QLabel("1.0")
         self.__lbl_speed_value.setStyleSheet("font-weight: bold; color: #00BCff;")
 
         lbl_speed_unit = QLabel("x")
@@ -172,7 +172,7 @@ class MainWindow(QWidget):
         self.__sld_speed = QSlider(Qt.Orientation.Horizontal)
         self.__sld_speed.setMinimum(1)
         self.__sld_speed.setMaximum(20)
-        self.__sld_speed.setValue(1)
+        self.__sld_speed.setValue(int(float(self.__lbl_speed_value.text())*10))
         self.__sld_speed.valueChanged.connect(
             lambda v: self.__lbl_speed_value.setText(f"{v / 10:.1f}")
         )
