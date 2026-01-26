@@ -240,9 +240,16 @@ def launch_custom_plot(
     scheduler: Optional[Scheduler] = None
 
     if settings.interactive:
-        def callback(i: int) -> Union[Scatter, Volume]:
-            return source.val(i * settings.speed).masked()
+        sim_time = 0.0
 
+        dt = 1.0 / settings.fps
+
+        def callback(i: int) -> Union[Scatter, Volume]:
+            nonlocal sim_time
+
+            sim_time += dt * settings.speed
+
+            return source.val(sim_time).masked()
         scheduler = plot.auto_update(callback, settings.fps)
 
         # HUD
@@ -453,7 +460,7 @@ class MainWindow(QWidget):
         self.current_atom = None
 
         self.settings = Settings()
-        self.settings.speed = 0.1
+        self.settings.speed = 2.0
         self.settings.fps = 20
         self.settings.interactive = True
         self.settings.plot_colormap = 'plasma'
@@ -523,8 +530,9 @@ class MainWindow(QWidget):
 
     def update_speed(self, value):
         new_speed = float(value) / 10.0
+        label_speed = new_speed /10
         self.settings.speed = new_speed
-        self.lbl_speed.setText(f"Szybkość animacji: {new_speed:.1f}x")
+        self.lbl_speed.setText(f"Szybkość animacji: {label_speed:.2f}x")
 
     def take_snapshot(self):
         active_window = None
@@ -626,7 +634,7 @@ class MainWindow(QWidget):
         dims_layout.addWidget(self.input_dim_x)
         dims_layout.addStretch()
 
-        form_layout.addRow("Wymiary przesrzeni:", dims_layout)
+        form_layout.addRow("Wymiary przestrzeni:", dims_layout)
 
         layout.addWidget(info_label)
         layout.addLayout(form_layout)
@@ -634,16 +642,18 @@ class MainWindow(QWidget):
         layout.addWidget(self.colorbar)
         layout.addStretch()
 
-        self.lbl_speed = QLabel(f"Szybkość animacji: {self.settings.speed:.1f}x")
+        self.lbl_speed = QLabel(f"Szybkość animacji: {self.settings.speed / 10:.2f}x")
         self.lbl_speed.setStyleSheet("font-weight: bold; color: #00BCff;")
         layout.addWidget(self.lbl_speed)
 
         self.speed_slider = QSlider(Qt.Orientation.Horizontal)
-        self.speed_slider.setMinimum(1)
-        self.speed_slider.setMaximum(20)
-        self.speed_slider.setValue(int(self.settings.speed))
+        self.speed_slider.setRange(10,500)
+        self.speed_slider.setValue(int(self.settings.speed*10))
         self.speed_slider.setCursor(Qt.CursorShape.PointingHandCursor)
         self.speed_slider.valueChanged.connect(self.update_speed)
+
+        self.speed_slider.setTickInterval(25)
+        self.speed_slider.setTickPosition(QSlider.TickPosition.TicksBelow)
 
         layout.addWidget(self.speed_slider)
         layout.addStretch()
