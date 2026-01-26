@@ -16,7 +16,7 @@ class Scheduler(QObject, Generic[T]):
         super().__init__(parent)
 
         self.__func: Optional[Callable[[T], None]] = func
-        self.__buffer: Buffer[T] = Buffer(4 * max_fps)
+        self.__buffer: Buffer[T] = Buffer(int(0.9 * max_fps))
         self.__blocked_until: float = 0.0
 
         self.__iter: int = 0

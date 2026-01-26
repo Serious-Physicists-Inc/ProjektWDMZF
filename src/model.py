@@ -79,9 +79,10 @@ class EnergyFunction:
     e = 1.602176634e-19
     # model constants
     mu = 1.0
-    alpha = 0.01
+    alpha = 1.0 / 137.036
+    c = 1.0 / alpha
     def __init__(self, state: State) -> None:
-        self.__init_val = self.mu * self.c_phys ** 2 * (np.sqrt(1 - self.alpha ** 2 / (state.spec.n - state.spec.l - 1 + np.sqrt((state.spec.l + 1) ** 2 - self.alpha ** 2)) ** 2) - 1)
+        self.__init_val = self.mu * self.c ** 2 * (np.sqrt(1 - self.alpha ** 2 / (state.spec.n - state.spec.l - 1 + np.sqrt((state.spec.l + 1) ** 2 - self.alpha ** 2)) ** 2) - 1)
         self.__init_ev_val = self.mu_phys * self.c_phys ** 2 * (np.sqrt(1 - self.alpha_phys ** 2 / (state.spec.n - state.spec.l - 1 + np.sqrt((state.spec.l + 1) ** 2 - self.alpha_phys ** 2)) ** 2) - 1) / self.e
     def val(self) -> NPFloatT:
         return self.__init_val
