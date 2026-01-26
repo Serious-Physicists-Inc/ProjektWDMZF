@@ -3,7 +3,7 @@ QMainWindow, QWidget {
     background-color: #2b2d30;
     color: #e0e0e0;
     font-family: 'Segoe UI', sans-serif;
-    font-size: 14px;
+    font-size: 11pt;
 }
 
 QLabel {
