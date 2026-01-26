@@ -1,7 +1,7 @@
+# python internals
 from __future__ import annotations
-
 from typing import Optional
-
+# external packages
 from PyQt6.QtCore import Qt, QPropertyAnimation, QEasingCurve, pyqtProperty, QRectF
 from PyQt6.QtGui import QPainter, QColor
 from PyQt6.QtWidgets import QCheckBox

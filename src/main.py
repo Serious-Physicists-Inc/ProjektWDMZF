@@ -1,8 +1,9 @@
+# python internals
 from __future__ import annotations
 import sys
 import traceback
 from typing import Union, Optional, List
-
+# internal packages
 from .stylesheet import stylesheet
 from .row import Row
 from .switch import ToggleSwitch
@@ -10,7 +11,7 @@ from .ntypes import ColormapTypeT, SphDims, Scatter, Volume
 from .model import StateSpec, State, Atom, Plotter
 from .plot import WindowSpec, ScatterWindow, VolumeWindow
 from .scheduler import Scheduler
-
+# external packages
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QFont, QImage, QIntValidator
 from PyQt6.QtWidgets import (

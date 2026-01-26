@@ -1,7 +1,6 @@
+# python internals
 from __future__ import annotations
-
-from typing import Callable
-
+# external packages
 from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtGui import QColor, QIntValidator
 from PyQt6.QtWidgets import QWidget, QHBoxLayout, QVBoxLayout, QLabel, QLineEdit, QPushButton, QFrame, QGraphicsDropShadowEffect
