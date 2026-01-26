@@ -21,350 +21,12 @@ import pyqtgraph as pg
 
 QApplication.setAttribute(Qt.ApplicationAttribute.AA_ShareOpenGLContexts)
 
-<<<<<<< Updated upstream
-CUSTOM_MAPS = {}
-
-
-def create_pg_cmap(hex_list):
-    colors = []
-    for h in hex_list:
-        c = QColor(h)
-        colors.append([c.red(), c.green(), c.blue(), 255])
-
-    colors = np.array(colors, dtype=np.uint8)
-    positions = np.linspace(0.0, 1.0, len(colors))
-    return pg.ColorMap(positions, colors)
-
-
-# --- Rejestracja modułów kolorystycznych ---
-favorites = {
-    'cc_fire': cc.fire,
-    'cc_glasbey': cc.glasbey,
-    'cc_bmy': cc.bmy,
-    'cc_coolwarm': cc.coolwarm,
-    'cc_rainbow': cc.rainbow,
-    'cc_kbc': cc.kbc
-}
-
-for name, hex_data in favorites.items():
-    CUSTOM_MAPS[name] = create_pg_cmap(hex_data)
-
-_original_pg_get = pg.colormap.get
-
-
-def patched_get_colormap(name, *args, **kwargs):
-    if name in CUSTOM_MAPS:
-        return CUSTOM_MAPS[name]
-    return _original_pg_get(name, *args, **kwargs)
-
-
-pg.colormap.get = patched_get_colormap
-
-
-@dataclass
-class Settings:
-    interactive: bool = True
-    fps: int = 20
-    speed: float = 1.0
-    plot_type: Literal['ScatterPlot', 'VolumePlot'] = 'ScatterPlot'
-    plot_dims: SphDims = SphDims(100, 100)
-    plot_colormap: ColormapTypeT = 'plasma'
-    show_hud: bool = True
-    show_colorbar: bool = True
-
-
-settings: Settings = Settings()
-
-
-# ==========================================
-#           Rdzenna logika wykresu
-# ==========================================
-
-def launch_custom_plot(
-        atom: Atom,
-        settings: Settings,
-        rows: list[StateRow]
-) -> Tuple[Union[ScatterWindow, VolumeWindow], Optional[Scheduler]]:
-    # 1. Specyfikacje
-    plot_spec: WindowSpec = WindowSpec(
-        title = "Chmura elektronowa atomu wodoru",
-        cmap_name = settings.plot_colormap,
-        show_hud = True,
-        show_colorbar = True
-    )
-    plotter = Plotter(atom, settings.plot_dims)
-
-    # 2. Typ wykresu
-    if settings.plot_type == 'ScatterPlot':
-        source = plotter.scatter()
-        plot = ScatterWindow(plot_spec)
-    elif settings.plot_type == 'VolumePlot':
-        source = plotter.volume()
-        plot = VolumeWindow(plot_spec)
-    else:
-        raise ValueError(f"Unknown value: {settings.plot_type}")
-
-    # 3. Pierwotny zarys
-    plot.draw(source.val().masked())
-    plot.showMaximized()
-
-    if plot._view.colorbar:
-        plot._view.colorbar.setVisible(settings.show_colorbar)
-
-    # 4. Ineraktywny harmonogram
-    scheduler: Optional[Scheduler] = None
-
-    if settings.interactive:
-        sim_time = 0.0
-
-        dt = 1.0 / settings.fps
-
-        def callback(i: int) -> Union[Scatter, Volume]:
-            nonlocal sim_time
-
-            sim_time += dt * settings.speed
-
-            return source.val(sim_time).masked()
-        scheduler = plot.auto_update(callback, settings.fps)
-
-        # HUD
-        en_vals = {}
-        for row in rows:
-            try:
-                n, l, m = row.get_values()
-                temp_state = State(StateSpec(n, l, m))
-                en_vals[(n, l, m)] = temp_state.energy_func().ev_val()
-            except Exception:
-                en_vals[(n, l, m)] = 0.0
-
-        fps_rec = []
-
-        def on_step(i: int) -> None:
-            nonlocal fps_rec
-
-            # Obliczenia FPS
-            current_fps = scheduler.fps if scheduler else 0
-            fps_rec.append(current_fps)
-            if len(fps_rec) > settings.fps:
-                fps_rec.pop(0)
-            fps_avg = sum(fps_rec) / len(fps_rec) if fps_rec else 0.0
-
-            # Konstrukcja HUD
-            if settings.show_hud:
-                hud_text = (
-                    f"Speed: {settings.speed:>10.2f}x\n"
-                    f"FPS:   {fps_avg:>10.1f}\n"
-                    f"Spec:\n"
-                )
-
-                for row in rows:
-                    try:
-                        n, l, m = row.get_values()
-                        energy = en_vals.get((n, l, m), 0.0)
-                        hud_text += f"  ({n}, {l}, {m}): {energy:.4f} eV\n"
-                    except:
-                        continue
-
-                plot.set_hud(hud_text)
-            else:
-                plot.set_hud("")
-
-        scheduler.stepOccurred.connect(on_step)
-
-    def toggle_colorbar(visible: bool):
-        if plot._view.colorbar:
-            plot._view.colorbar.setVisible(visible)
-
-    plot.toggle_colorbar = toggle_colorbar
-
-    return plot, scheduler
-
-
-# =======================================================
-#           KOMPONENTY INTERFEJSU UŻYTKOWNIKA
-# =======================================================
-
-class StateRow(QWidget):
-    def __init__(self, parent_layout: QVBoxLayout, index: int, remove_callback: Callable):
-        super().__init__()
-        self.layout_ref = parent_layout
-        self.remove_callback = remove_callback
-
-        # --- Rama kart ---
-        self.card_frame = QFrame()
-        self.card_frame.setObjectName("StateCard")
-
-        shadow = QGraphicsDropShadowEffect()
-        shadow.setBlurRadius(15)
-        shadow.setColor(QColor(0, 0, 0, 80))
-        shadow.setOffset(0, 4)
-        self.card_frame.setGraphicsEffect(shadow)
-
-        card_layout = QHBoxLayout()
-        card_layout.setContentsMargins(10, 10, 10, 10)
-        card_layout.setSpacing(10)
-        self.card_frame.setLayout(card_layout)
-
-        main_layout = QVBoxLayout()
-        main_layout.setContentsMargins(5, 5, 5, 5)
-        main_layout.addWidget(self.card_frame)
-        self.setLayout(main_layout)
-
-        # --- Dane wejściowe ---
-        self.input_n = QLineEdit("1")
-        self.input_l = QLineEdit("0")
-        self.input_m = QLineEdit("0")
-
-        for inp in [self.input_n, self.input_l, self.input_m]:
-            inp.setFixedWidth(50)
-            inp.setAlignment(Qt.AlignmentFlag.AlignCenter)
-
-        # --- Przyciski i etykiety ---
-        self.btn_remove = QPushButton("X")
-        self.btn_remove.setObjectName("DestructiveButton")
-        self.btn_remove.setFixedWidth(36)
-        self.btn_remove.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.btn_remove.clicked.connect(self.remove_self)
-
-        lbl_title = QLabel(f"Orbital {index + 1}")
-        lbl_title.setStyleSheet("color: #00BCff; font-weight: bold;")
-
-        # --- Połączenie układu ---
-        card_layout.addWidget(lbl_title)
-        card_layout.addStretch()
-
-        def make_lbl(html_text):
-            l = QLabel(html_text)
-            l.setStyleSheet("font-family: 'Times New Roman', serif; font-size: 19px; color: #ffffff;")
-            return l
-
-        card_layout.addWidget(make_lbl("<i>n</i> :"))
-        card_layout.addWidget(self.input_n)
-        card_layout.addWidget(make_lbl("ℓ :"))
-        card_layout.addWidget(self.input_l)
-        card_layout.addWidget(make_lbl("<i>m<sub>ℓ</sub></i> :"))
-        card_layout.addWidget(self.input_m)
-        card_layout.addSpacing(10)
-        card_layout.addWidget(self.btn_remove)
-
-    def remove_self(self):
-        self.remove_callback(self)
-        self.setParent(None)
-        self.deleteLater()
-
-    def get_values(self) -> Tuple[int, int, int]:
-        try:
-            return int(self.input_n.text()), int(self.input_l.text()), int(self.input_m.text())
-        except ValueError:
-            raise ValueError("Wszystkie liczby kwantowe muszą być liczbami całkowitymi.")
-
-    def energy_state(self) -> Tuple[int, int, int]:
-        n, l, m = self.get_values
-        return n, l, m
-
-
-class ToggleSwitch(QCheckBox):
-    def __init__(
-            self,
-            parent=None,
-            width=50,
-            height=26,
-            bg_color="#4e5254",
-            circle_color="#ffffff",
-            active_color="#00BCff"
-    ):
-        super().__init__(parent)
-        self.setFixedSize(width, height)
-        self.setCursor(Qt.CursorShape.PointingHandCursor)
-
-        self._bg_color = bg_color
-        self._circle_color = circle_color
-        self._active_color = active_color
-
-        self._circle_position = 3
-        self.animation = QPropertyAnimation(self, b"circle_position", self)
-        self.animation.setEasingCurve(QEasingCurve.Type.InOutCubic)
-        self.animation.setDuration(250)
-
-        self.setText("")
-        self.stateChanged.connect(self.start_transition)
-
-    @pyqtProperty(float)
-    def circle_position(self):
-        return self._circle_position
-
-    @circle_position.setter
-    def circle_position(self, pos):
-        self._circle_position = pos
-        self.update()
-
-    def start_transition(self, state):
-        self.animation.stop()
-        if state:
-            self.animation.setEndValue(self.width() - self.height() + 3)
-        else:
-            self.animation.setEndValue(3)
-        self.animation.start()
-
-    def hitButton(self, pos):
-        return self.contentsRect().contains(pos)
-
-    def paintEvent(self, e):
-        p = QPainter(self)
-        p.setRenderHint(QPainter.RenderHint.Antialiasing)
-        track_color = QColor(self._active_color) if self.isChecked() else QColor(self._bg_color)
-
-        p.setPen(Qt.PenStyle.NoPen)
-        p.setBrush(track_color)
-
-        radius = int(self.height() / 2)
-        p.drawRoundedRect(0, 0, self.width(), self.height(), radius, radius)
-
-        p.setBrush(QColor(self._circle_color))
-        p.drawEllipse(QRectF(self._circle_position, 3, self.height() - 6, self.height() - 6))
-        p.end()
-
-
-=======
->>>>>>> Stashed changes
 class MainWindow(QWidget):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Menu")
         self.resize(500, 550)
-<<<<<<< Updated upstream
-
-        # --- Inicjalizacja danych ---
-        self.current_atom = None
-
-        self.settings = Settings()
-        self.settings.speed = 2.0
-        self.settings.fps = 20
-        self.settings.interactive = True
-        self.settings.plot_colormap = 'plasma'
-        self.settings.show_hud = True
-        self.settings.show_colorbar = True
-        self.settings.plot_dims = SphDims(100,100)
-
-        self.plot_cache = {
-            'ScatterPlot': {'window': None, 'scheduler': None},
-            'VolumePlot': {'window': None, 'scheduler': None}
-        }
-
-        self.window_settings = QPushButton("Zrzut ekranu")
-        self.window_settings.setMinimumHeight(40)
-        self.window_settings.clicked.connect(self.take_snapshot)
-        self.window_settings.setFixedWidth(110)
-
-        self.current_plot = None
-        self.current_Scheduler = None
-        self.superposition_rows = []
-
-        # --- Inicjalizacja interfejsu użytkownika ---
-        self.setStyleSheet(DARK_STYLESHEET)
-=======
         self.setStyleSheet(stylesheet)
->>>>>>> Stashed changes
         main_layout = QVBoxLayout()
         self.setLayout(main_layout)
 
@@ -389,44 +51,6 @@ class MainWindow(QWidget):
         self.__btn_apply.setCursor(Qt.CursorShape.PointingHandCursor)
         self.__btn_apply.clicked.connect(self.__process)
 
-<<<<<<< Updated upstream
-    # --- Metody konfiguracji ---
-
-    def hud_check(self, state):
-        self.settings.show_hud = (state == 2)
-
-    def colorbar_check(self, state):
-        is_checked = (state == 2)
-        self.settings.show_colorbar = is_checked
-
-        target_type = self.settings.plot_type
-        cache = self.plot_cache[target_type]
-
-        if cache['window'] is not None:
-            if hasattr(cache['window'], 'toggle_colorbar'):
-                cache['window'].toggle_colorbar(is_checked)
-
-    def update_colormap(self, text):
-        self.settings.plot_colormap = text
-        print(f"Colormap changed to: {text}")
-
-    def update_speed(self, value):
-        new_speed = float(value) / 10.0
-        label_speed = new_speed /10
-        self.settings.speed = new_speed
-        self.lbl_speed.setText(f"Szybkość animacji: {label_speed:.2f}x")
-
-    def take_snapshot(self):
-        active_window = None
-
-        for key, cache in self.plot_cache.items():
-            win = cache['window']
-            if win is not None and win._view.isVisible():
-                active_window = win
-                break
-
-        if active_window is None:
-=======
         main_layout.addWidget(self.__btn_apply)
     @property
     def fps(self) -> int:
@@ -451,7 +75,6 @@ class MainWindow(QWidget):
         return 'volume' if self.__chk_vol.isChecked() else 'scatter'
     def take_snapshot(self) -> None:
         if self.__plot is None:
->>>>>>> Stashed changes
             QMessageBox.warning(self, "Błąd", "Nie wykryto aktywnego okna z wykresem.")
             return
 
@@ -513,9 +136,6 @@ class MainWindow(QWidget):
 
         form_layout.addRow(make_label("Rozmiar siatki przestrzennej:"), self.__inp_dim)
 
-<<<<<<< Updated upstream
-        form_layout.addRow("Wymiary przestrzeni:", dims_layout)
-=======
         self.__hud = QCheckBox()
         self.__hud.setChecked(True)
 
@@ -525,29 +145,11 @@ class MainWindow(QWidget):
         self.__colorbar.setChecked(True)
 
         form_layout.addRow(make_label("Colorbar:"), self.__colorbar)
->>>>>>> Stashed changes
 
         layout.addWidget(info_label)
         layout.addLayout(form_layout)
         layout.addSpacing(25)
 
-<<<<<<< Updated upstream
-        self.lbl_speed = QLabel(f"Szybkość animacji: {self.settings.speed / 10:.2f}x")
-        self.lbl_speed.setStyleSheet("font-weight: bold; color: #00BCff;")
-        layout.addWidget(self.lbl_speed)
-
-        self.speed_slider = QSlider(Qt.Orientation.Horizontal)
-        self.speed_slider.setRange(10,500)
-        self.speed_slider.setValue(int(self.settings.speed*10))
-        self.speed_slider.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.speed_slider.valueChanged.connect(self.update_speed)
-
-        self.speed_slider.setTickInterval(25)
-        self.speed_slider.setTickPosition(QSlider.TickPosition.TicksBelow)
-
-        layout.addWidget(self.speed_slider)
-        layout.addStretch()
-=======
         speed_layout = QHBoxLayout()
 
         lbl_speed_title = QLabel("Szybkość animacji:")
@@ -555,7 +157,6 @@ class MainWindow(QWidget):
 
         self.__lbl_speed_value = QLabel("0.1")
         self.__lbl_speed_value.setStyleSheet("font-weight: bold; color: #00BCff;")
->>>>>>> Stashed changes
 
         lbl_speed_unit = QLabel("x")
         lbl_speed_unit.setStyleSheet("font-weight: bold; color: #00BCff;")
