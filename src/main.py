@@ -53,8 +53,11 @@ class MainWindow(QWidget):
 
         main_layout.addWidget(self.__btn_apply)
 
-        self.copyright_label = QLabel("Copyright © Mikołaj Suszek Hubert Rączkiewicz 2025")
-        main_layout.addWidget(self.copyright_label, alignment=Qt.AlignmentFlag.AlignRight)
+        copyright_label = QLabel("© Mikołaj Suszek & Hubert Rączkiewicz  2026")
+
+        main_layout.addSpacing(15)
+        main_layout.addWidget(copyright_label, alignment=Qt.AlignmentFlag.AlignRight)
+
     @property
     def fps(self) -> int:
         return int(self.__inp_fps.text())
