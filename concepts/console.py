@@ -4,10 +4,10 @@ from typing import Tuple, Union, Literal, Optional
 from dataclasses import dataclass
 import sys
 # internal packages
-from .ntypes import ColormapTypeT, SphDims, Scatter, Volume
-from .model import StateSpec, State, Atom, Plotter
-from .scheduler import Scheduler
-from .plot import *
+from src.ntypes import ColormapTypeT, SphDims, Scatter, Volume
+from src.model import StateSpec, State, Atom, Plotter
+from src.scheduler import Scheduler
+from src.plot import *
 # external packages
 from PyQt6 import QtCore, QtWidgets
 from PyQt6.QtWidgets import QApplication
@@ -55,7 +55,7 @@ def main() -> Tuple[Union[ScatterWindow, VolumeWindow], Optional[Scheduler]]:
     scheduler = plot.auto_update(callback, settings.fps)
 
     fps_rec = []
-    en_vals = dict(zip(((s.spec.n, s.spec.l, s.spec.m) for s in states), (s.energy_func().ev_val() for s in states)))
+    en_vals = dict(zip(((s.n, s.l, s.m) for s in atom.specs), (s.energy_func().ev_val() for s in states)))
     def on_step(i: int) -> None:
         nonlocal scheduler
         nonlocal fps_rec

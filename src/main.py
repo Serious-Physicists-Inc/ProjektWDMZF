@@ -1,152 +1,27 @@
 from __future__ import annotations
-
-# ==========================================
-#               IMPORTY
-# ==========================================
-
-# --- Biblioteki standardowe ---
 import sys
 import traceback
-from dataclasses import dataclass
-from typing import (
-    Tuple, Union, Literal, Callable, Optional
-)
+from typing import Union, Optional, List
 
-# --- Matematyczne ---
-import numpy as np
+from .stylesheet import stylesheet
+from .row import Row
+from .switch import ToggleSwitch
+from .ntypes import ColormapTypeT, SphDims, Scatter, Volume
+from .model import StateSpec, State, Atom, Plotter
+from .plot import WindowSpec, ScatterWindow, VolumeWindow
+from .scheduler import Scheduler
 
-# --- Wizualizacja i wykres ---
-import colorcet as cc
-import pyqtgraph as pg
-
-# --- PyQt6 GUI ---
-from PyQt6.QtCore import (
-    Qt, QPropertyAnimation, QEasingCurve,
-    pyqtProperty, QRectF
-)
-from PyQt6.QtGui import (
-    QPainter, QColor, QFont, QImage, QIntValidator
-)
+from PyQt6.QtCore import Qt
+from PyQt6.QtGui import QFont, QImage, QIntValidator
 from PyQt6.QtWidgets import (
     QApplication, QWidget, QVBoxLayout, QHBoxLayout, QFormLayout,
     QTabWidget, QCheckBox, QPushButton, QLineEdit, QComboBox,
-    QLabel, QMessageBox, QSlider, QScrollArea, QFrame,
-    QGraphicsDropShadowEffect, QFileDialog
-)
-
-# --- Nasze moduły ---
-from .ntypes import ColormapTypeT, SphDims, Scatter, Volume
-from .model import StateSpec, State, Atom, Plotter
-from .plot import Window, WindowSpec, ScatterWindow, VolumeWindow
-from .scheduler import *
-
-# ==========================================
-#               STYL GUI
-# ==========================================
-
-DARK_STYLESHEET = """
-QMainWindow, QWidget {
-    background-color: #2b2d30;
-    color: #e0e0e0;
-    font-family: 'Segoe UI', sans-serif;
-    font-size: 14px;
-}
-
-QLabel {
-    background-color: transparent;
-}
-
-/* Tabs */
-QTabWidget::pane {
-    border: 1px solid #3c3f41;
-    border-radius: 4px;
-    background: #2b2d30;
-}
-QTabBar::tab {
-    background: #3c3f41;
-    color: #bbb;
-    padding: 8px 20px;
-    border-top-left-radius: 4px;
-    border-top-right-radius: 4px;
-    margin-right: 2px;
-}
-QTabBar::tab:selected {
-    background: #4e5254;
-    color: white;
-    font-weight: bold;
-    border-bottom: 2px solid #00BCff;
-}
-
-/* Inputs */
-QLineEdit {
-    background-color: #1e1f22;
-    border: 1px solid #555;
-    border-radius: 4px;
-    padding: 4px;
-    color: white;
-    font-weight: bold;
-}
-QLineEdit:focus {
-    border: 1px solid #00BCff;
-}
-
-/* Scroll Area */
-QScrollArea {
-    border: none;
-    background: transparent;
-}
-QScrollArea > QWidget > QWidget {
-    background: transparent;
-}
-
-/* Buttons */
-QPushButton {
-    background-color: #36393d;
-    border: 1px solid #555;
-    border-radius: 5px;
-    padding: 6px 12px;
-    color: white;
-}
-QPushButton:hover {
-    background-color: #4e5254;
-}
-QPushButton#PrimaryButton {
-    background-color: #00BCff;
-    border: none;
-    color: black;
-    font-weight: bold;
-    font-size: 15px;
-    padding: 10px;
-}
-QPushButton#PrimaryButton:hover {
-    background-color: #33c9ff;
-}
-QPushButton#DestructiveButton {
-    background-color: transparent;
-    color: #ff6b6b;
-    border: 1px solid #ff6b6b;
-    font-weight: bold;
-    font-size: 15px;
-}
-QPushButton#DestructiveButton:hover {
-    background-color: #ff6b6b;
-    color: white;
-}
-
-/* Cards */
-QFrame#StateCard {
-    background-color: #3c3f41;
-    border-radius: 8px;
-    border: 1px solid #4e5254;
-}
-"""
-
-# ==========================================
-#           Konfiguracje
-# ==========================================
+    QLabel, QMessageBox, QSlider, QScrollArea, QFrame, QFileDialog)
+import pyqtgraph as pg
 
 QApplication.setAttribute(Qt.ApplicationAttribute.AA_ShareOpenGLContexts)
 
+<<<<<<< Updated upstream
 CUSTOM_MAPS = {}
 
 
@@ -450,11 +325,14 @@ class ToggleSwitch(QCheckBox):
         p.end()
 
 
+=======
+>>>>>>> Stashed changes
 class MainWindow(QWidget):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Menu")
         self.resize(500, 550)
+<<<<<<< Updated upstream
 
         # --- Inicjalizacja danych ---
         self.current_atom = None
@@ -484,30 +362,34 @@ class MainWindow(QWidget):
 
         # --- Inicjalizacja interfejsu użytkownika ---
         self.setStyleSheet(DARK_STYLESHEET)
+=======
+        self.setStyleSheet(stylesheet)
+>>>>>>> Stashed changes
         main_layout = QVBoxLayout()
-        main_layout.addWidget(self.window_settings, alignment=Qt.AlignmentFlag.AlignRight)
         self.setLayout(main_layout)
 
-        # --- Zakładki ---
-        self.tabs = QTabWidget()
-        self.tabs.addTab(self.Superposition(), "Kreator orbitali")
-        self.tabs.addTab(self.Dstate(), "Ustawienia")
-        main_layout.addWidget(self.tabs)
+        self.__atom: Optional[Atom] = None
+        self.__plot: Optional[Union[ScatterWindow, VolumeWindow]] = None
+        self.__scheduler: Optional[Scheduler] = None
+        self.__rows: List[Row] = []
 
-        # --- Dolny pasek kontrolny ---
-        bottom_container = QFrame()
-        bottom_container.setStyleSheet("background: #3c3f41; border-radius: 8px;")
-        bottom_layout = QVBoxLayout()
-        bottom_container.setLayout(bottom_layout)
+        self.__btn_snapshot = QPushButton("Zrzut ekranu")
+        self.__btn_snapshot.setMinimumHeight(30)
+        self.__btn_snapshot.setFixedWidth(110)
+        self.__btn_snapshot.clicked.connect(self.take_snapshot)
+        main_layout.addWidget(self.__btn_snapshot, alignment=Qt.AlignmentFlag.AlignRight)
 
-        # --- Przycisk "Zastosuj" ---
-        self.btn_apply = QPushButton("Zastosuj")
-        self.btn_apply.setObjectName("PrimaryButton")
-        self.btn_apply.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.btn_apply.clicked.connect(self.process_inputs)
+        self.__tabs = QTabWidget()
+        self.__tabs.addTab(self.__states_tab(), "Kreator orbitali")
+        self.__tabs.addTab(self.__settings_tab(), "Ustawienia")
+        main_layout.addWidget(self.__tabs)
 
-        main_layout.addWidget(self.btn_apply)
+        self.__btn_apply = QPushButton("Zastosuj")
+        self.__btn_apply.setObjectName("PrimaryButton")
+        self.__btn_apply.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.__btn_apply.clicked.connect(self.__process)
 
+<<<<<<< Updated upstream
     # --- Metody konfiguracji ---
 
     def hud_check(self, state):
@@ -544,104 +426,112 @@ class MainWindow(QWidget):
                 break
 
         if active_window is None:
+=======
+        main_layout.addWidget(self.__btn_apply)
+    @property
+    def fps(self) -> int:
+        return int(self.__inp_fps.text())
+    @property
+    def speed(self) -> float:
+        return self.__sld_speed.value() / 10.0
+    @property
+    def dim(self) -> int:
+        return int(self.__inp_dim.text())
+    @property
+    def cmap_name(self) -> ColormapTypeT:
+        return self.__box_cmap.currentText()
+    @property
+    def show_hud(self) -> bool:
+        return self.__hud.isChecked()
+    @property
+    def show_colorbar(self) -> bool:
+        return self.__colorbar.isChecked()
+    @property
+    def plot_type(self) -> str:
+        return 'volume' if self.__chk_vol.isChecked() else 'scatter'
+    def take_snapshot(self) -> None:
+        if self.__plot is None:
+>>>>>>> Stashed changes
             QMessageBox.warning(self, "Błąd", "Nie wykryto aktywnego okna z wykresem.")
             return
 
         try:
-            img_array = active_window.snapshot()
-
-            file_path, _ = QFileDialog.getSaveFileName(
-                self,
-                "Zapisz zrzut ekranu",
-                "snapshot.png",
-                "Images (*.png *.jpg *.bmp)"
-            )
+            img_array = self.__plot.snapshot()
+            file_path, _ = QFileDialog.getSaveFileName(self,"Zapisz zrzut ekranu","snapshot.png","PNG Image (*.png);;JPEG Image (*.jpg);;Bitmap (*.bmp)")
 
             if file_path:
                 height, width, channels = img_array.shape
-                bytes_per_line = channels * width
+                qimg = QImage(img_array.tobytes(), width, height, channels * width, QImage.Format.Format_RGBA8888)
 
-                if not img_array.flags['C_CONTIGUOUS']:
-                    img_array = np.ascontiguousarray(img_array)
-
-                q_img = QImage(
-                    img_array.data,
-                    width,
-                    height,
-                    bytes_per_line,
-                    QImage.Format.Format_RGBA8888
-                )
-
-                if q_img.save(file_path):
-                    QMessageBox.information(self, "Sukces", f"Zapisano zrzut w:\n{file_path}")
+                if qimg.save(file_path):
+                    QMessageBox.information(self, "Sukces", f"Zrzut wykresu zapisano do pliku:\n{file_path}")
                 else:
-                    QMessageBox.critical(self, "Błąd", "Nie udało się zapisać pliku.")
+                    QMessageBox.critical(self, "Błąd", "Zapis do pliku nie powiódł się")
 
         except Exception as e:
             traceback.print_exc()
             QMessageBox.critical(self, "Błąd", f"Wystąpił błąd:\n{e}")
 
-    # --- Tworzenie interfejsu użytkownika ---
-
-    def Dstate(self):
+    def __settings_tab(self):
         Tab1 = QWidget()
         layout = QVBoxLayout()
         layout.setAlignment(Qt.AlignmentFlag.AlignTop)
 
         info_label = QLabel("Dodatkowe ustawienia")
-        info_label.setStyleSheet("font-size: 16px; font-weight: bold; margin-bottom: 10px;")
+        info_label.setStyleSheet("font-size: 16px; font-weight: bold; margin-bottom: 12px;")
 
         form_layout = QFormLayout()
+        form_layout.setLabelAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
+        form_layout.setFormAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop)
+        form_layout.setFieldGrowthPolicy(QFormLayout.FieldGrowthPolicy.ExpandingFieldsGrow)
+        form_layout.setHorizontalSpacing(20)
+        form_layout.setVerticalSpacing(12)
 
-        self.box_cmap = QComboBox()
-        available_maps = [
-            'plasma', 'viridis', 'inferno', 'magma', 'cividis', 'grey',
-            'cc_fire', 'cc_glasbey', 'cc_bmy', 'cc_coolwarm', 'cc_rainbow', 'cc_kbc'
-        ]
-        self.box_cmap.addItems(available_maps)
-        self.box_cmap.currentTextChanged.connect(self.update_colormap)
-        self.box_cmap.setFixedWidth(200)
-        form_layout.addRow("Kolor mapy:", self.box_cmap)
+        label_width = 260
 
-        self.hud = QCheckBox("Pokaż HUD")
-        self.hud.setChecked(self.settings.show_hud)
-        self.hud.stateChanged.connect(self.hud_check)
-        self.hud.setCursor(Qt.CursorShape.PointingHandCursor)
+        def make_label(text):
+            lbl = QLabel(text)
+            lbl.setFixedWidth(label_width)
+            return lbl
 
-        self.colorbar = QCheckBox("Colorbar")
-        self.colorbar.setChecked(self.settings.show_colorbar)
-        self.colorbar.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.colorbar.stateChanged.connect(self.colorbar_check)
+        self.__box_cmap = QComboBox()
+        self.__box_cmap.addItems(sorted(pg.colormap.listMaps()))
+        self.__box_cmap.setCurrentText("plasma")
+        self.__box_cmap.setMinimumWidth(220)
 
-        fps_layout = QHBoxLayout()
-        self.input_fps = QLineEdit("20")
-        validator = QIntValidator(5, 120)
-        self.input_fps.setValidator(validator)
-        self.input_fps.setFixedWidth(60)
+        form_layout.addRow(make_label("Skala kolorów:"), self.__box_cmap)
 
-        fps_layout.addWidget(self.input_fps)
-        fps_layout.addStretch()
+        self.__inp_fps = QLineEdit("20")
+        self.__inp_fps.setValidator(QIntValidator(5, 120))
+        self.__inp_fps.setFixedWidth(80)
 
-        form_layout.addRow("FPS:", fps_layout)
+        form_layout.addRow(make_label("Ilość klatek na sekundę:"), self.__inp_fps)
 
-        dims_layout = QHBoxLayout()
-        self.input_dim_x = QLineEdit("100")
-        validator = QIntValidator(10, 1000)
-        self.input_dim_x.setValidator(validator)
-        self.input_dim_x.setFixedWidth(60)
+        self.__inp_dim = QLineEdit("100")
+        self.__inp_dim.setValidator(QIntValidator(20, 1000))
+        self.__inp_dim.setFixedWidth(80)
 
-        dims_layout.addWidget(QLabel(""))
-        dims_layout.addWidget(self.input_dim_x)
-        dims_layout.addStretch()
+        form_layout.addRow(make_label("Rozmiar siatki przestrzennej:"), self.__inp_dim)
 
+<<<<<<< Updated upstream
         form_layout.addRow("Wymiary przestrzeni:", dims_layout)
+=======
+        self.__hud = QCheckBox()
+        self.__hud.setChecked(True)
+
+        form_layout.addRow(make_label("Pokaż HUD:"), self.__hud)
+
+        self.__colorbar = QCheckBox()
+        self.__colorbar.setChecked(True)
+
+        form_layout.addRow(make_label("Colorbar:"), self.__colorbar)
+>>>>>>> Stashed changes
 
         layout.addWidget(info_label)
         layout.addLayout(form_layout)
-        layout.addWidget(self.hud)
-        layout.addWidget(self.colorbar)
-        layout.addStretch()
+        layout.addSpacing(25)
 
+<<<<<<< Updated upstream
         self.lbl_speed = QLabel(f"Szybkość animacji: {self.settings.speed / 10:.2f}x")
         self.lbl_speed.setStyleSheet("font-weight: bold; color: #00BCff;")
         layout.addWidget(self.lbl_speed)
@@ -657,8 +547,39 @@ class MainWindow(QWidget):
 
         layout.addWidget(self.speed_slider)
         layout.addStretch()
+=======
+        speed_layout = QHBoxLayout()
 
-        self.chk_volume = ToggleSwitch()
+        lbl_speed_title = QLabel("Szybkość animacji:")
+        lbl_speed_title.setStyleSheet("font-weight: bold; color: #00BCff;")
+
+        self.__lbl_speed_value = QLabel("0.1")
+        self.__lbl_speed_value.setStyleSheet("font-weight: bold; color: #00BCff;")
+>>>>>>> Stashed changes
+
+        lbl_speed_unit = QLabel("x")
+        lbl_speed_unit.setStyleSheet("font-weight: bold; color: #00BCff;")
+
+        speed_layout.addWidget(lbl_speed_title)
+        speed_layout.addSpacing(8)
+        speed_layout.addWidget(self.__lbl_speed_value)
+        speed_layout.addWidget(lbl_speed_unit)
+        speed_layout.addStretch()
+
+        layout.addLayout(speed_layout)
+
+        self.__sld_speed = QSlider(Qt.Orientation.Horizontal)
+        self.__sld_speed.setMinimum(1)
+        self.__sld_speed.setMaximum(20)
+        self.__sld_speed.setValue(1)
+        self.__sld_speed.valueChanged.connect(
+            lambda v: self.__lbl_speed_value.setText(f"{v / 10:.1f}")
+        )
+
+        layout.addWidget(self.__sld_speed)
+        layout.addSpacing(30)
+
+        self.__chk_vol = ToggleSwitch()
 
         lbl_scatter = QLabel("Scatter")
         lbl_volume = QLabel("Volume")
@@ -672,126 +593,125 @@ class MainWindow(QWidget):
         switch_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
         switch_layout.addWidget(lbl_scatter)
-        switch_layout.addWidget(self.chk_volume)
+        switch_layout.addSpacing(10)
+        switch_layout.addWidget(self.__chk_vol)
+        switch_layout.addSpacing(10)
         switch_layout.addWidget(lbl_volume)
 
         layout.addLayout(switch_layout)
 
         Tab1.setLayout(layout)
         return Tab1
-
-    def Superposition(self):
+    def __states_tab(self) -> QWidget:
         Tab2 = QWidget()
         main_tab_layout = QVBoxLayout()
 
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
-        scroll.setFrameShape(QFrame.Shape.NoFrame)
-        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
-        scroll.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
 
-        self.states_container = QWidget()
-        self.states_layout = QVBoxLayout()
-        self.states_layout.setAlignment(Qt.AlignmentFlag.AlignTop)
-        self.states_layout.setSpacing(10)
-        self.states_container.setLayout(self.states_layout)
+        states_container = QWidget()
+        self.__states_layout = QVBoxLayout()
+        self.__states_layout.setAlignment(Qt.AlignmentFlag.AlignTop)
+        states_container.setLayout(self.__states_layout)
 
-        scroll.setWidget(self.states_container)
+        scroll.setWidget(states_container)
         main_tab_layout.addWidget(scroll)
 
-        self.btn_add_state = QPushButton("+ Dodaj stan")
-        self.btn_add_state.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.btn_add_state.clicked.connect(lambda: self.add_state_row())
-        main_tab_layout.addWidget(self.btn_add_state)
+        self.__btn_add_state = QPushButton("+ Dodaj stan")
+        self.__btn_add_state.clicked.connect(lambda: self.__add_row())
+        main_tab_layout.addWidget(self.__btn_add_state)
 
-        # Default states
-        self.add_state_row(defaults=(3, 2, 0))
-        self.add_state_row(defaults=(2, 1, 0))
+        self.__add_row(defaults=(3,2,0))
+        self.__add_row(defaults=(2,1,0))
 
         Tab2.setLayout(main_tab_layout)
         return Tab2
+    def __add_row(self, defaults=None) -> None:
+        row = Row(self.__states_layout)
+        row.removeBtnClickOccurred.connect(lambda r=row: self.__remove_row(r))
+        row.set_index(len(self.__rows))
 
-    # --- Metody logiki ---
-
-    def add_state_row(self, defaults=None):
-        row = StateRow(self.states_layout, len(self.superposition_rows), self.remove_state_row)
         if defaults:
-            row.input_n.setText(str(defaults[0]))
-            row.input_l.setText(str(defaults[1]))
-            row.input_m.setText(str(defaults[2]))
+            row.n,row.l,row.m = defaults
 
-        self.states_layout.addWidget(row)
-        self.superposition_rows.append(row)
+        self.__states_layout.addWidget(row)
+        self.__rows.append(row)
+    def __remove_row(self, row_object: Row) -> None:
+        if row_object in self.__rows:
+            self.__rows.remove(row_object)
 
-    def remove_state_row(self, row_object):
-        if row_object in self.superposition_rows:
-            self.superposition_rows.remove(row_object)
+        row_object.setParent(None)
+        row_object.deleteLater()
 
-    def process_inputs(self):
+        for i,row in enumerate(self.__rows):
+            row.set_index(i)
+    def __process(self) -> None:
         try:
-            # --- Zebranie danych stanu ---
-            states_list = []
-            if not self.superposition_rows:
-                raise ValueError("Proszę dodać conajmniej jeden stan.")
+            states = []
+            if not self.__rows:
+                raise ValueError("Wymagane podanie przynajmniej jednego stanu")
 
-            for row in self.superposition_rows:
-                n, l, m = row.get_values()
-                states_list.append(State(StateSpec(n, l, m)))
-            self.current_atom = Atom(*states_list)
+            for row in self.__rows:
+                states.append(State(StateSpec(row.n,row.l,row.m)))
+            self.__atom = Atom(*states)
 
-            atom_to_plot = self.current_atom
-
-            # --- Określenie typu wykresu ---
-            target_type = 'VolumePlot' if self.chk_volume.isChecked() else 'ScatterPlot'
-            other_type = 'ScatterPlot' if target_type == 'VolumePlot' else 'VolumePlot'
-
-            self.settings.plot_type = target_type
-            self.settings.interactive = True
-
-            try:
-                dim_x = int(self.input_dim_x.text())
-                self.settings.plot_dims = SphDims(dim_x, dim_x)
-            except ValueError:
-                raise ValueError("Rozdzielczość musi być liczbą całkowitą.")
-
-            try:
-                fps_val = int(self.input_fps.text())
-                self.settings.fps = fps_val
-            except ValueError:
-                raise ValueError("FPS musi być liczbą całkowitą.")
-
-            # --- Niszczenie starego wykresu ---
-            def destroy_window(cache_entry):
-                if cache_entry['window'] is not None:
-                    try:
-                        cache_entry['window'].abort()
-                    except Exception:
-                        pass
-                    cache_entry['window'] = None
-                    cache_entry['scheduler'] = None
-
-            destroy_window(self.plot_cache[other_type])
-
-            target_cache = self.plot_cache[target_type]
-            destroy_window(target_cache)
-
-            # --- Inicjalizacja wykresu ---
-            plot, scheduler = launch_custom_plot(
-                atom_to_plot,
-                self.settings,
-                self.superposition_rows
+            plot_spec: WindowSpec = WindowSpec(
+                title="Chmura elektronowa atomu wodoru",
+                cmap_name=self.cmap_name,
+                show_hud=self.show_hud,
+                show_colorbar=self.show_colorbar
             )
 
-            target_cache['window'] = plot
-            target_cache['scheduler'] = scheduler
+            plotter = Plotter(self.__atom,SphDims(self.dim,self.dim))
 
-        except ValueError as e:
-            QMessageBox.warning(self, "Input Error", f"Nieprawidłowe dane wejściowe: {e}")
-        except Exception as e:
+            if self.plot_type == 'volume':
+                source = plotter.volume()
+                self.__plot = VolumeWindow(plot_spec)
+            else:
+                source = plotter.scatter()
+                self.__plot = ScatterWindow(plot_spec)
+
+            self.__plot.draw(source.val().masked())
+            self.__plot.show()
+
+            def callback(i: int) -> Union[Scatter,Volume]:
+                return source.val(i * self.speed).masked()
+
+            if self.__scheduler is not None:
+                self.__scheduler.abort()
+
+            self.__scheduler = self.__plot.auto_update(callback,self.fps)
+
+            fps_rec = []
+            en_vals = dict(zip(((spec.n,spec.l,spec.m) for spec in self.__atom.specs),(state.energy_func().ev_val() for state in self.__atom.states)))
+
+            def on_step(i: int) -> None:
+                nonlocal fps_rec,en_vals
+
+                current_fps = self.__scheduler.fps
+                fps_rec.append(current_fps)
+                if len(fps_rec) > self.fps:
+                    fps_rec.pop(0)
+                fps_avg = sum(fps_rec) / len(fps_rec) if fps_rec else 0.0
+
+                if self.show_hud:
+                    self.__plot.set_hud(
+                        f"speed:{self.speed:>15.2f}\n"
+                        f"fps:{fps_avg:>17.1f}\nspec:\n"
+                        + "\n".join(
+                            f"{' ' * 5}({s.n},{s.l},{s.m}):\n"
+                            f"{' ' * 7}en: {en_vals[(s.n,s.l,s.m)]:.4f} eV"
+                            for s in self.__atom.specs
+                        )
+                    )
+
+            self.__scheduler.stepOccurred.connect(on_step)
+
+        except ValueError as error:
+            QMessageBox.warning(self,"Input Error",f"Nieprawidłowe dane wejściowe: {error}")
+        except Exception as exception:
             traceback.print_exc()
-            QMessageBox.critical(self, "Error", f"Nastąpił nieoczekiwany błąd: {e}")
-            print(e)
-
+            QMessageBox.critical(self,"Error",f"Nastąpił nieoczekiwany błąd: {exception}")
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)

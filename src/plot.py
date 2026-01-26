@@ -59,8 +59,7 @@ class Window:
 
     def _normalize(self, val: NPFArrayT) -> NPFArrayT:
         v_log = np.log1p(np.maximum(val, 0.0))
-        v_norm = v_log / self.__scale
-        return v_norm
+        return v_log / np.log1p(self.__scale)
     def draw(self, val: Union[Scatter, Volume]) -> None:
         vmax = np.max(val.val)
         self.__scale = vmax
@@ -90,8 +89,6 @@ class Window:
 
         return self.__scheduler
     def show(self) -> None:
-        self._view.show()
-    def showMaximized(self) -> None:
         self._view.showMaximized()
     def set_hud(self, text: str) -> None:
         if self._view.hud is None:
@@ -145,14 +142,16 @@ class ScatterWindow(Window):
         rgba = self._cmap.map(self._normalize(sc.val) ** 0.4, mode='float')
         rgba[:, 3] = 1.0
         return np.ascontiguousarray(rgba)
+    @property
+    def type(self): return "scatter"
     def draw(self, sc: Scatter) -> None:
-        if self.__scatter is not None:
-            self._view.plot.removeItem(self.__scatter)
-
         super().draw(sc)
-        self.__scatter = gl.GLScatterPlotItem(pos=np.column_stack(sc.points), color=self.__color(sc), size=2)
-        self.__scatter.setGLOptions('translucent')
-        self._view.plot.addItem(self.__scatter)
+        if self.__scatter is None:
+            self.__scatter = gl.GLScatterPlotItem(pos=np.column_stack(sc.points), color=self.__color(sc), size=2)
+            self.__scatter.setGLOptions('translucent')
+            self._view.plot.addItem(self.__scatter)
+        else:
+            self.__scatter.setData(pos=np.column_stack(sc.points), color=self.__color(sc), size=2)
     def update(self, sc: Scatter) -> None:
         if self.__scatter is None:
             raise RuntimeError("Wykres punktowy nie został narysowany")
@@ -175,15 +174,17 @@ class VolumeWindow(Window):
         rgba = self._cmap.map(v_norm ** 0.4, mode='float').reshape((*v_norm.shape, 4))
         rgba[..., 3] = v_norm ** 0.5
         return np.ascontiguousarray((rgba * 255).astype(NPUintT))
+    @property
+    def type(self): return "volume"
     def draw(self, vl: Volume) -> None:
-        if self.__volume is not None:
-            self._view.plot.removeItem(self.__volume)
-
         super().draw(vl)
-        self.__volume = gl.GLVolumeItem(data=self.__color(vl), smooth=True, sliceDensity=1)
+        if self.__volume is None:
+            self.__volume = gl.GLVolumeItem(data=self.__color(vl), smooth=True, sliceDensity=1)
+            self._view.plot.addItem(self.__volume)
+        else:
+            self.__volume.setData(data=self.__color(vl), smooth=True, sliceDensity=1)
 
         self.center()
-        self._view.plot.addItem(self.__volume)
     def update(self, vl: Volume) -> None:
         if self.__volume is None:
             raise RuntimeError("Wykres chmurowy nie został narysowany")

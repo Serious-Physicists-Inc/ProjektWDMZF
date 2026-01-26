@@ -101,6 +101,9 @@ class Atom:
             return NotImplemented
         return self.specs == other.specs
     @property
+    def states(self) -> Tuple[State, ...]:
+        return self.__states
+    @property
     def specs(self) -> Tuple[StateSpec, ...]:
         return tuple(state.spec for state in self.__states)
     def prob_func(self, p: SphPointsGrid) ->  ProbFunction:

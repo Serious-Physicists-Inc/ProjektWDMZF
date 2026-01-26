@@ -1,8 +1,8 @@
 .idea/
-.build/
 !.idea/runConfigurations/
 .venv/
 src/__pycache__
 docs/
+build/
 !docs/main.pdf
 !docs/main.tex
